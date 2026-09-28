@@ -1,0 +1,16 @@
+{
+  "api-scope": [
+    "trim.file.userAccess",
+    "trim.file.sharedAccess"
+  ],
+  "data-share": {
+    "shares": [
+      {
+        "name": "vmrp"
+      },
+      {
+        "name": "vmrp/data"
+      }
+    ]
+  }
+}

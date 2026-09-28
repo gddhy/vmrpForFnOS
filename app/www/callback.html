@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>授权结果</title>
+    <style>
+        :root {
+            --bg: #14161a;
+            --fg: #e6e8eb;
+            --muted: #9aa0a6;
+            --accent: #4da3ff;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg);
+            color: var(--fg);
+            font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+            padding: 24px;
+            box-sizing: border-box;
+        }
+
+        .card {
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .icon {
+            font-size: 40px;
+            margin-bottom: 12px;
+        }
+
+        h1 {
+            font-size: 17px;
+            font-weight: 600;
+            margin: 0 0 8px;
+        }
+
+        p {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.6;
+            margin: 0 0 18px;
+        }
+
+        button {
+            background: var(--accent);
+            color: #fff;
+            border: 0;
+            border-radius: 8px;
+            padding: 9px 18px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        pre {
+            text-align: left;
+            background: #1c1f24;
+            border: 1px solid #2a2e35;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 11px;
+            line-height: 1.5;
+            color: var(--muted);
+            overflow: auto;
+            max-height: 40vh;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <div class="icon" id="icon">⏳</div>
+        <h1 id="title">正在处理授权结果…</h1>
+        <p id="desc">请稍候，本窗口将自动关闭。</p>
+        <button id="closeBtn" style="display:none;">关闭窗口</button>
+        <pre id="raw" style="display:none;"></pre>
+    </div>
+
+    <script>
+        (function () {
+            'use strict';
+
+            var titleEl = document.getElementById('title');
+            var descEl = document.getElementById('desc');
+            var iconEl = document.getElementById('icon');
+            var rawEl = document.getElementById('raw');
+            var closeBtn = document.getElementById('closeBtn');
+
+            // 解析 URL 查询参数 (同时兼容 hash 形式)
+            function parseQuery() {
+                var out = {};
+                var q = window.location.search || '';
+                if (!q && window.location.hash) {
+                    var h = window.location.hash.replace(/^#/, '');
+                    if (h.indexOf('?') === 0) h = h.slice(1);
+                    q = h.indexOf('=') >= 0 ? ('?' + h) : '';
+                }
+                if (q.charAt(0) === '?') q = q.slice(1);
+                q.split('&').forEach(function (kv) {
+                    if (!kv) return;
+                    var i = kv.indexOf('=');
+                    var k = i < 0 ? kv : kv.slice(0, i);
+                    var v = i < 0 ? '' : kv.slice(i + 1);
+                    try { out[decodeURIComponent(k)] = decodeURIComponent(v); } catch (e) {
+                        out[k] = v;
+                    }
+                });
+                return out;
+            }
+
+            var q = parseQuery();
+            var status = q.status || q.code || '';
+            var err = q.error || '';
+            var method = q.method || '';
+            var state = q.state || '';
+
+            var ok = (status === 'success' || status === '0' || q.code === '0') && !err;
+
+            if (ok) {
+                iconEl.textContent = '✅';
+                titleEl.textContent = '授权成功';
+                descEl.textContent = '已把所选目录授权给 MRP 模拟器。可以关闭本窗口，回到应用继续操作。';
+            } else if (err === 'access_denied') {
+                iconEl.textContent = '🚫';
+                titleEl.textContent = '授权被拒绝';
+                descEl.textContent = '你没有执行此授权操作的权限（该操作通常需要管理员）。';
+            } else {
+                iconEl.textContent = '⚠️';
+                titleEl.textContent = '未获取到授权结果';
+                descEl.textContent = '可能授权未完成或被取消。回到应用后可点击「重新申请目录授权」重试。';
+            }
+
+            // 通知原窗口 (同源才能成功)
+            try {
+                if (window.opener && !window.opener.closed) {
+                    window.opener.postMessage({
+                        type: 'vmrp:auth-result',
+                        result: { status: status, error: err, method: method, state: state, ok: ok }
+                    }, window.location.origin);
+                }
+            } catch (e) { /* 忽略 */ }
+
+            // 展示原始参数 (便于排查)
+            if (Object.keys(q).length) {
+                rawEl.style.display = 'block';
+                rawEl.textContent = JSON.stringify(q, null, 2);
+            }
+
+            // 尝试自动关闭; 失败则给出按钮
+            setTimeout(function () {
+                try { window.close(); } catch (e) { /* 忽略 */ }
+                // 若 800ms 后仍在, 说明关不掉 -> 显示按钮
+                setTimeout(function () {
+                    closeBtn.style.display = 'inline-block';
+                    closeBtn.addEventListener('click', function () {
+                        try { window.close(); } catch (e) { /* 忽略 */ }
+                        // 仍关不掉则退回应用页
+                        setTimeout(function () {
+                            window.location.replace('/app/vmrp/index.html');
+                        }, 200);
+                    });
+                }, 800);
+            }, 900);
+        })();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,15 @@
+#!/bin/bash
+
+### 卸载后: 清理 socket / pid / 残留进程, 避免影响下次安装
+
+SOCKET_PATH="${TRIM_APPDEST}/app.sock"
+PID_FILE="${TRIM_PKGVAR}/app.pid"
+
+if [ -n "${TRIM_APPDEST}" ]; then
+    pkill -f "${TRIM_APPDEST}/server/server.js" >/dev/null 2>&1
+fi
+
+rm -f "${SOCKET_PATH}" 2>/dev/null
+rm -f "${PID_FILE}" 2>/dev/null
+
+exit 0

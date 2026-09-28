@@ -1,0 +1,17 @@
+appname               = vmrp
+version               = 1.0.5
+display_name          = MRP模拟器
+desc                  = 基于 Emscripten 的冒泡(Mythroad)功能机模拟器，可在飞牛上运行 MRP 应用与游戏，支持双击 .mrp 文件直接打开运行。
+platform              = all
+source                = thirdparty
+maintainer            = zengming00
+maintainer_url        = https://github.com/vmrp/
+distributor           = gddhy
+distributor_url       = https://gddhy.net/
+install_dep_apps      = nodejs_v22
+desktop_uidir         = ui
+desktop_applaunchname = vmrp.Application
+micro_app             = true
+ctl_stop              = true
+checkport             = false
+os_min_version        = 1.2.0401

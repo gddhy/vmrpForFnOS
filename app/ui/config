@@ -1,0 +1,26 @@
+{
+    ".url": {
+        "vmrp.Application": {
+            "title": "MRP模拟器",
+            "icon": "images/icon_{0}.png",
+            "type": "iframe",
+            "protocol": "",
+            "gatewayPrefix": "/app/vmrp",
+            "gatewaySocket": "app.sock",
+            "url": "/app/vmrp",
+            "allUsers": true
+        },
+        "vmrp.OpenMrp": {
+            "title": "MRP模拟器",
+            "icon": "images/icon_{0}.png",
+            "type": "iframe",
+            "protocol": "",
+            "gatewayPrefix": "/app/vmrp",
+            "gatewaySocket": "app.sock",
+            "url": "/app/vmrp",
+            "allUsers": true,
+            "fileTypes": ["mrp"],
+            "noDisplay": true
+        }
+    }
+}

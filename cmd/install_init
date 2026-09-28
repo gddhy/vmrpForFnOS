@@ -1,0 +1,21 @@
+#!/bin/bash
+
+### 安装/升级前: 清理可能残留的 socket / pid / 旧进程
+###
+### 为什么需要这一步:
+###   升级或重装时, 旧的 app.sock 会让新服务 listen 失败 (EADDRINUSE),
+###   旧的 pid 文件会让 status 误判为"已运行"或"未运行",
+###   最终表现为应用打开报 502 / 系统日志"应用异常退出"。
+
+SOCKET_PATH="${TRIM_APPDEST}/app.sock"
+PID_FILE="${TRIM_PKGVAR}/app.pid"
+
+# 停掉可能仍在运行的旧进程 (限定本应用目录, 避免误杀)
+if [ -n "${TRIM_APPDEST}" ]; then
+    pkill -f "${TRIM_APPDEST}/server/server.js" >/dev/null 2>&1
+fi
+
+rm -f "${SOCKET_PATH}" 2>/dev/null
+rm -f "${PID_FILE}" 2>/dev/null
+
+exit 0

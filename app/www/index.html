@@ -1,0 +1,2682 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MRP模拟器</title>
+    <meta name="theme-color" content="#161b28">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon.png">
+    <link rel="apple-touch-icon" href="./icon.png">
+    <style>
+        * {
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-1: #0d1117;
+            --bg-2: #161b28;
+            --card-bg: rgba(255, 255, 255, 0.04);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --accent: #58a6ff;
+            --accent-2: #3fb950;
+            --danger: #f85149;
+            --warning: #d29922;
+            --purple: #bc8cff;
+            --text: #e6edf3;
+            --text-dim: #8b949e;
+            --key-bg: #21262d;
+            --key-bg-hover: #30363d;
+            --key-active: #1f6feb;
+            --radius: 12px;
+            --radius-sm: 8px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background: radial-gradient(ellipse at top, var(--bg-2), var(--bg-1));
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        #main {
+            width: 100%;
+            max-width: 480px;
+            margin: 0;
+            padding: 16px 14px 40px;
+        }
+
+        /* ---- 状态 / 进度条 ---- */
+        .status-bar {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        #status {
+            height: auto;
+            font-weight: 600;
+            color: var(--text-dim);
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        #progress {
+            height: 5px;
+            width: 100%;
+            max-width: 280px;
+            border: none;
+            border-radius: 3px;
+            background: var(--card-bg);
+            appearance: none;
+            -webkit-appearance: none;
+        }
+        #progress::-webkit-progress-bar {
+            background: rgba(255,255,255,0.06);
+            border-radius: 3px;
+        }
+        #progress::-webkit-progress-value {
+            background: linear-gradient(90deg, var(--accent), var(--purple));
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+        #progress::-moz-progress-bar {
+            background: linear-gradient(90deg, var(--accent), var(--purple));
+            border-radius: 3px;
+        }
+
+        /* ---- 屏幕区域 ---- */
+        .screen-frame {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+
+        #screen {
+            position: relative;
+        }
+
+        #canvas {
+            /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
+            position: relative;
+            display: block;
+            left: 50%;
+            margin-left: -120px;
+            width: 240px;
+            height: 320px;
+            border: 0px none;
+            padding: 0;
+            background-color: #000;
+            box-shadow:
+                0 0 0 3px rgba(255,255,255,0.06),
+                0 0 0 4px rgba(0,0,0,0.4),
+                0 10px 50px rgba(0,0,0,0.7),
+                0 0 80px rgba(88,166,255,0.07);
+        }
+
+        #dialog {
+            display: flex;
+            flex-direction: column;
+            position: absolute;
+            top: 0;
+            left: 50%;
+            margin-left: -120px;
+            width: 240px;
+            height: 320px;
+            background-color: #1c2128;
+            color: var(--text);
+            overflow: hidden;
+            visibility: hidden;
+        }
+
+        #dialog h1 {
+            text-align: center;
+            margin: 0;
+            padding: 6px 0;
+            font-size: 0.9em;
+            font-weight: 600;
+            background: rgba(255,255,255,0.06);
+            border-bottom: 1px solid var(--card-border);
+            color: var(--text);
+        }
+
+        #dialog textarea {
+            flex: 1;
+            width: 100%;
+            border: none;
+            background: #0d1117;
+            color: var(--text);
+            padding: 8px;
+            font-size: 13px;
+            line-height: 1.5;
+            box-sizing: border-box;
+            overflow: auto;
+            outline: none;
+            resize: none;
+            user-select: text;
+        }
+
+        #dialog .control {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 10px;
+            background: rgba(255,255,255,0.04);
+            border-top: 1px solid var(--card-border);
+        }
+
+        #dialog .control button {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 5px 18px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: opacity 0.15s;
+        }
+        #dialog .control button:active {
+            opacity: 0.7;
+        }
+
+        #dialogInfo {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        /* ---- 按键区域 ---- */
+        #keymap {
+            max-width: 380px;
+            margin: 0 auto 24px;
+        }
+
+        #keymap > div {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+
+        #keymap > div button {
+            width: 42px;
+            height: 42px;
+            line-height: 42px;
+            text-align: center;
+            font-size: 15px;
+            font-weight: 600;
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            background: var(--key-bg);
+            color: var(--text);
+            outline: none;
+            cursor: pointer;
+            transition: background 0.1s, transform 0.05s;
+            flex-shrink: 0;
+        }
+
+        #keymap > div button:active {
+            background: var(--key-active);
+            transform: scale(0.92);
+        }
+
+        /* 方向键 / 功能键 用不同色调 */
+        #key_up, #key_down, #key_left, #key_right, #key_ok {
+            background: #1c2a3a;
+            border-color: rgba(88,166,255,0.2);
+        }
+        #key_up:active, #key_down:active, #key_left:active, #key_right:active, #key_ok:active {
+            background: var(--accent);
+        }
+        /* 左右软键 */
+        #key_sleft, #key_sright {
+            background: #2a1a2a;
+            border-color: rgba(188,140,255,0.15);
+            font-size: 12px;
+        }
+        #key_sleft:active, #key_sright:active {
+            background: var(--purple);
+        }
+
+        /* ---- 操作按钮 ---- */
+        .action-bar {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .action-bar input[type="button"] {
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-sm);
+            background: var(--card-bg);
+            color: var(--text);
+            padding: 9px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s, transform 0.05s;
+            white-space: nowrap;
+        }
+        .action-bar input[type="button"]:active {
+            transform: scale(0.96);
+        }
+
+        #import { border-color: rgba(63,185,80,0.25); background: rgba(63,185,80,0.1); color: var(--accent-2); }
+        #import:active { background: rgba(63,185,80,0.2); }
+
+        #saveProgress { border-color: rgba(63,185,80,0.25); background: rgba(63,185,80,0.1); color: var(--accent-2); }
+        #saveProgress:active { background: rgba(63,185,80,0.2); }
+
+        #clearSaves { border-color: rgba(248,81,73,0.25); background: rgba(248,81,73,0.1); color: var(--danger); }
+        #clearSaves:active { background: rgba(248,81,73,0.2); }
+
+        #toggleAA { border-color: rgba(56,211,159,0.25); background: rgba(56,211,159,0.1); color: #38d39f; }
+        #toggleAA:active { background: rgba(56,211,159,0.2); }
+
+        #toggleKeymap { border-color: rgba(247,120,168,0.25); background: rgba(247,120,168,0.1); color: #f778a8; }
+        #toggleKeymap:active { background: rgba(247,120,168,0.2); }
+
+        #fileMgr { border-color: rgba(88,166,255,0.25); background: rgba(88,166,255,0.1); color: var(--accent); }
+        #fileMgr:active { background: rgba(88,166,255,0.2); }
+
+        #screenshot { border-color: rgba(34,211,238,0.25); background: rgba(34,211,238,0.1); color: #22d3ee; }
+        #screenshot:active { background: rgba(34,211,238,0.2); }
+
+        /* 退出二次确认开关 (仅飞牛环境显示)
+           开 / 关 两种状态使用相同配色, 仅按钮文字不同 */
+        #toggleExitConfirm { border-color: rgba(188,140,255,0.25); background: rgba(188,140,255,0.1); color: var(--purple); }
+        #toggleExitConfirm:active { background: rgba(188,140,255,0.2); }
+
+        /* ---- 文件管理器 ---- */
+        .fm-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.75);
+            z-index: 10000;
+            display: flex; align-items: center; justify-content: center;
+            padding: 8px;
+        }
+        .fm-modal {
+            background: var(--bg-2);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            width: 100%; max-width: 460px;
+            max-height: 92vh;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+        }
+        .fm-header {
+            display: flex; align-items: center; gap: 6px;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--card-border);
+            background: rgba(255,255,255,0.03);
+            flex-shrink: 0;
+        }
+        .fm-header button {
+            background: var(--card-bg); border: 1px solid var(--card-border);
+            color: var(--text); border-radius: var(--radius-sm);
+            padding: 6px 12px; font-size: 13px; cursor: pointer; white-space: nowrap;
+            transition: background 0.1s;
+        }
+        .fm-header button:active { background: rgba(255,255,255,0.1); }
+        #fmPath {
+            flex: 1; font-size: 13px; font-weight: 600; color: var(--accent);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            min-width: 0;
+        }
+        .fm-toolbar {
+            display: flex; gap: 6px; padding: 8px 12px; flex-wrap: wrap;
+            border-bottom: 1px solid var(--card-border);
+            flex-shrink: 0;
+        }
+        .fm-toolbar button {
+            background: var(--card-bg); border: 1px solid var(--card-border);
+            color: var(--text-dim); border-radius: var(--radius-sm);
+            padding: 6px 12px; font-size: 12px; cursor: pointer;
+            transition: background 0.1s, color 0.1s;
+        }
+        .fm-toolbar button:active { background: rgba(255,255,255,0.08); color: var(--text); }
+        .fm-file-list {
+            flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+            padding: 4px 0; min-height: 200px;
+        }
+        .fm-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 11px 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            cursor: pointer; transition: background 0.1s;
+        }
+        .fm-item:active { background: rgba(255,255,255,0.06); }
+        .fm-item-icon { font-size: 18px; flex-shrink: 0; width: 22px; text-align: center; }
+        .fm-item-name { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .fm-item-size { font-size: 11px; color: var(--text-dim); flex-shrink: 0; min-width: 50px; text-align: right; }
+        .fm-item-menu { font-size: 20px; color: var(--text-dim); cursor: pointer; padding: 0 6px; flex-shrink: 0; line-height: 1; }
+        .fm-empty { padding: 30px; text-align: center; color: var(--text-dim); font-size: 13px; }
+
+        /* Context Menu */
+        .fm-ctx-menu {
+            position: fixed; background: #1c2128;
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-sm);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+            z-index: 10001; min-width: 150px; overflow: hidden;
+            display: none;
+        }
+        .fm-ctx-item {
+            padding: 11px 16px; font-size: 13px; color: var(--text);
+            cursor: pointer; transition: background 0.1s;
+        }
+        .fm-ctx-item:active { background: rgba(255,255,255,0.08); }
+        .fm-ctx-item.danger { color: var(--danger); }
+        .fm-ctx-sep { height: 1px; background: var(--card-border); }
+
+        /* Sub Dialog */
+        .fm-dialog-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); z-index: 10002;
+            display: flex; align-items: center; justify-content: center; padding: 16px;
+        }
+        .fm-dialog-box {
+            background: var(--bg-2); border: 1px solid var(--card-border);
+            border-radius: var(--radius); width: 100%; max-width: 380px;
+            overflow: hidden;
+        }
+        .fm-dialog-title {
+            padding: 14px 16px 8px; font-size: 14px; font-weight: 600; color: var(--text);
+        }
+        .fm-dialog-body { padding: 4px 16px 16px; }
+        .fm-dialog-text { font-size: 14px; color: var(--text); line-height: 1.6; }
+        .fm-dialog-sub {
+            margin-top: 8px; font-size: 12px; color: var(--text-dim); line-height: 1.7;
+        }
+        .fm-dialog-input {
+            width: 100%; background: var(--bg-1);
+            border: 1px solid var(--card-border); border-radius: var(--radius-sm);
+            color: var(--text); padding: 10px 12px; font-size: 14px;
+            outline: none; transition: border-color 0.15s;
+        }
+        .fm-dialog-input:focus { border-color: var(--accent); }
+        .fm-props-row { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; }
+        .fm-props-label { color: var(--text-dim); font-size: 12px; flex-shrink: 0; }
+        .fm-props-value { color: var(--text); font-size: 12px; font-weight: 500; text-align: right; word-break: break-all; }
+        .fm-dialog-actions {
+            display: flex; gap: 8px; justify-content: flex-end;
+            padding: 0 16px 14px;
+        }
+        .fm-dialog-actions button {
+            padding: 8px 20px; border-radius: var(--radius-sm);
+            font-size: 13px; cursor: pointer; border: 1px solid var(--card-border);
+            transition: opacity 0.1s;
+        }
+        .fm-dialog-actions button:active { opacity: 0.7; }
+        .fm-btn-ok { background: var(--accent); color: #fff; border: none; }
+        .fm-btn-cancel { background: var(--card-bg); color: var(--text); }
+
+        /* ---- 网页内确认弹窗 ---- */
+        .confirm-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.75);
+            z-index: 10020;
+            display: flex; align-items: center; justify-content: center;
+            padding: 24px;
+        }
+        .confirm-box {
+            background: var(--bg-2);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            width: 100%; max-width: 340px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+            overflow: hidden;
+        }
+        .confirm-title {
+            padding: 16px 18px 4px;
+            font-size: 15px; font-weight: 600; color: var(--text);
+        }
+        .confirm-body {
+            padding: 8px 18px 18px;
+            font-size: 13px; line-height: 1.7; color: var(--text-dim);
+            white-space: pre-line;
+            word-break: break-word;
+            user-select: text;
+        }
+        .confirm-actions {
+            display: flex; gap: 10px; justify-content: flex-end;
+            padding: 0 18px 16px;
+        }
+        .confirm-btn {
+            padding: 8px 22px; border-radius: var(--radius-sm);
+            font-size: 13px; cursor: pointer; border: 1px solid var(--card-border);
+            background: var(--card-bg); color: var(--text);
+            transition: opacity 0.1s;
+        }
+        .confirm-btn:active { opacity: 0.7; }
+        .confirm-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .confirm-primary { background: var(--accent); color: #fff; border: none; }
+        .confirm-danger { background: var(--danger); color: #fff; border: none; }
+
+        /* ---- 来源选择弹窗 (本地文件 / 飞牛文件) ---- */
+        .srcpick-body {
+            padding: 6px 18px 18px;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .srcpick-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 13px 15px;
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-sm);
+            background: var(--card-bg);
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s, transform 0.05s;
+            text-align: left; width: 100%;
+            font-family: inherit;
+        }
+        .srcpick-item:active { transform: scale(0.985); }
+        .srcpick-item:hover { border-color: rgba(88,166,255,0.45); background: rgba(88,166,255,0.08); }
+        .srcpick-ico {
+            width: 34px; height: 34px; flex: 0 0 34px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 9px; background: rgba(88,166,255,0.12);
+        }
+        .srcpick-ico svg { width: 19px; height: 19px; stroke: var(--accent); fill: none;
+            stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+        .srcpick-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .srcpick-name { font-size: 13.5px; font-weight: 600; color: var(--text); }
+        .srcpick-desc { font-size: 11.5px; color: var(--text-dim); }
+        .srcpick-item[disabled] { opacity: 0.42; cursor: not-allowed; }
+        .srcpick-item[disabled]:hover { border-color: var(--card-border); background: var(--card-bg); }
+
+        /* ---- 截屏预览弹窗 ---- */
+        .shot-preview {
+            padding: 8px 18px 14px;
+            display: flex;
+            justify-content: center;
+            background: var(--bg-2);
+        }
+        #screenshotImg {
+            display: block;
+            max-width: 100%;
+            max-height: 55vh;
+            image-rendering: pixelated;
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-sm);
+            background: #000;
+        }
+
+        /* ---- 吐司提示 ---- */
+        .toast {
+            position: fixed;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(30,35,50,0.92);
+            border: 1px solid var(--card-border);
+            color: var(--text);
+            padding: 10px 22px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            line-height: 1.6;
+            z-index: 2147483647;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            max-width: 90vw;
+            text-align: center;
+        }
+        .toast.show {
+            opacity: 1;
+        }
+
+
+        /* ---- 搜索栏 ---- */
+        .search-bar {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .search-bar form {
+            display: inline-flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .search-bar input[type="text"] {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-sm);
+            color: var(--text);
+            padding: 8px 14px;
+            font-size: 13px;
+            outline: none;
+            user-select: text;
+            transition: border-color 0.15s;
+        }
+        .search-bar input[type="text"]:focus {
+            border-color: var(--accent);
+        }
+        .search-bar input[type="submit"] {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-sm);
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.15s;
+        }
+        .search-bar input[type="submit"]:active {
+            opacity: 0.8;
+        }
+
+        /* ---- 帮助 / 说明 ---- */
+        .help-section, .func-section {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 0;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+        .help-section summary, .func-section summary {
+            padding: 12px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-dim);
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.15s;
+        }
+        .help-section summary::-webkit-details-marker,
+        .func-section summary::-webkit-details-marker { display: none; }
+        .help-section summary::before,
+        .func-section summary::before {
+            content: "\25B6";
+            font-size: 10px;
+            transition: transform 0.2s;
+        }
+        .help-section[open] summary::before,
+        .func-section[open] summary::before {
+            transform: rotate(90deg);
+        }
+        .help-section summary:hover,
+        .func-section summary:hover {
+            background: rgba(255,255,255,0.03);
+        }
+        .help-section .help-content {
+            padding: 4px 16px 16px;
+            font-size: 12.5px;
+            line-height: 1.8;
+            color: var(--text-dim);
+            user-select: text;
+        }
+        .func-section .func-content {
+            padding: 8px 16px 16px;
+        }
+        .func-section .search-bar {
+            margin-bottom: 12px;
+        }
+        .func-section .action-bar {
+            margin-bottom: 0;
+        }
+        .help-section .help-content a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        .help-section .help-content a:hover {
+            text-decoration: underline;
+        }
+
+        /* ---- 响应式 ---- */
+        @media (max-width: 380px) {
+            #keymap > div button {
+                width: 38px;
+                height: 38px;
+                line-height: 38px;
+                font-size: 14px;
+            }
+            #keymap > div { gap: 4px; }
+            .action-bar input[type="button"] {
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+        }
+
+        @media (min-width: 600px) {
+            #main {
+                padding: 24px 20px 48px;
+            }
+        }
+
+        /* 竖屏: canvas 横向拉伸至容器宽度, 竖向等比缩放 */
+        @media (orientation: portrait) {
+            /* 加载完成后贴顶显示 */
+            #main.loaded .status-bar {
+                display: none;
+            }
+            #main.loaded {
+                padding-top: 4px;
+            }
+
+            #screen {
+                width: var(--portrait-canvas-w, 100%);
+            }
+
+            #canvas {
+                width: 100%;
+                height: auto;
+                aspect-ratio: 240 / 320;
+                left: 0;
+                margin-left: 0;
+            }
+
+            #dialog {
+                width: auto;
+                height: auto;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                margin-left: 0;
+            }
+
+            /* 键盘宽度调整为屏幕宽度 */
+            #keymap {
+                max-width: 100%;
+                width: 100%;
+            }
+            #keymap > div {
+                gap: 4px;
+            }
+            #keymap > div button {
+                width: auto;
+                flex: 1 1 0;
+                aspect-ratio: 1;
+                height: auto;
+                line-height: 1;
+                font-size: 3.5vw;
+            }
+        }
+
+        /* 手机竖屏: 画面边缘到屏幕边缘 */
+        @media (orientation: portrait) and (max-width: 599px) {
+            .screen-frame {
+                margin-left: -14px;
+                margin-right: -14px;
+                margin-bottom: 16px;
+            }
+        }
+    </style>
+    <!-- 飞牛 fnOS SDK (@trimjs/web-app, 本地打包, 无外部依赖) -->
+    <script src="./vendor/trimjs-web-app.js"></script>
+    <script src="./midi.js"></script>
+</head>
+
+<body>
+    <div id="main">
+        <div class="status-bar">
+            <div id="status">下载中...</div>
+            <progress value="0" max="100" id="progress"></progress>
+        </div>
+        <div class="screen-frame">
+            <div id="screen">
+                <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
+                <div id="dialog">
+                    <h1>标题</h1>
+                    <textarea></textarea>
+                    <div class="control">
+                        <button id="dialogOk">确定</button>
+                        <span id="dialogInfo">0/0</span>
+                        <button id="dialogCancel">取消</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="keymap">
+            <div>
+                <button id="key_sleft">=</button>
+                <button id="key_up">↑</button>
+                <button id="key_sright">=</button>
+                <button id="key_1">1</button>
+                <button id="key_2">2</button>
+                <button id="key_3">3</button>
+                <button id="key_star">*</button>
+            </div>
+            <div>
+                <button id="key_left">←</button>
+                <button id="key_ok">ok</button>
+                <button id="key_right">→</button>
+                <button id="key_4">4</button>
+                <button id="key_5">5</button>
+                <button id="key_6">6</button>
+                <button id="key_0">0</button>
+            </div>
+            <div>
+                <button style="visibility: hidden;"></button>
+                <button id="key_down">↓</button>
+                <button style="visibility: hidden;"></button>
+                <button id="key_7">7</button>
+                <button id="key_8">8</button>
+                <button id="key_9">9</button>
+                <button id="key_pound">#</button>
+            </div>
+        </div>
+        <details class="func-section">
+            <summary>功能区</summary>
+            <div class="func-content">
+                <div class="action-bar">
+                    <input type="file" id="files" multiple style="display:none" />
+                    <input type="button" id="import" value="导入文件" />
+                    <input type="button" id="saveProgress" value="保存进度" />
+                    <input type="button" id="clearSaves" value="清除存档" />
+                    <input type="button" id="fileMgr" value="文件管理" />
+                    <input type="button" id="toggleAA" value="抗锯齿" />
+                    <input type="button" id="toggleKeymap" value="虚拟键盘" />
+                    <input type="button" id="screenshot" value="截屏" />
+                    <input type="button" id="toggleExitConfirm" value="退出确认" style="display:none" />
+                </div>
+            </div>
+        </details>
+        <details class="help-section">
+            <summary>使用帮助 &amp; 说明</summary>
+            <div class="help-content">
+                <strong style="color:var(--accent-2)">按键操作：</strong>按键：0-9 对应 0-9 键<br>减号对应 * 键，等号对应 # 键<br>上下左右或 WASD 控制方向<br>回车键：确认 / 选择 / OK<br>Q 键或左中括号：左功能键<br>E 键或右中括号：右功能键<br>Tab 键：接听键，ESC 键：挂机键<br><br>
+                <strong style="color:var(--accent-2)">存档功能：</strong>游戏进度会自动保存到 IndexedDB（无容量限制），下次打开网页时自动恢复。也可点击"保存进度"手动保存，点击"清除存档"清除所有存档。<br><br>
+                <strong style="color:var(--warning)">提示：</strong>网页无法发短信，所以不可能产生付费，放心使用<br><br>
+                MIDI 播放采用的是简易的 <a href="https://github.com/chenx/MidiPlayer">MidiPlayer</a>，效果很一般。<br><br>
+                开源地址：<a href="https://github.com/vmrp/vmrp" target="_blank">https://github.com/vmrp/vmrp</a><br>
+                采用 GNU General Public License v3.0 开源协议<br><br>
+                <button id="reAuthBtn" class="confirm-btn" style="margin-top:6px;font-size:12px;padding:4px 10px;">重新申请目录授权</button>
+            </div>
+        </details>
+    </div>
+    <div id="toast" class="toast"></div>
+    <!-- 网页内确认弹窗 -->
+    <div id="confirmDialog" class="confirm-overlay" style="display:none;">
+        <div class="confirm-box">
+            <div id="confirmDialogTitle" class="confirm-title">提示</div>
+            <div id="confirmDialogBody" class="confirm-body"></div>
+            <div class="confirm-actions">
+                <button id="confirmDialogCancel" class="confirm-btn">取消</button>
+                <button id="confirmDialogOk" class="confirm-btn confirm-danger">确定</button>
+            </div>
+        </div>
+    </div>
+    <!-- 截屏预览弹窗 -->
+    <!-- 来源选择弹窗 (本地文件 / 飞牛中的文件) -->
+    <div id="srcPickDialog" class="confirm-overlay" style="display:none;">
+        <div class="confirm-box">
+            <div id="srcPickTitle" class="confirm-title">选择文件来源</div>
+            <div class="srcpick-body">
+                <button id="srcPickLocal" class="srcpick-item" type="button">
+                    <span class="srcpick-ico">
+                        <svg viewBox="0 0 24 24"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg>
+                    </span>
+                    <span class="srcpick-txt">
+                        <span class="srcpick-name">从本地选择文件</span>
+                        <span class="srcpick-desc">当前设备的文件</span>
+                    </span>
+                </button>
+                <button id="srcPickFnos" class="srcpick-item" type="button">
+                    <span class="srcpick-ico">
+                        <svg viewBox="0 0 24 24"><path d="M3 8.5 12 3l9 5.5v7L12 21l-9-5.5z"/><path d="M12 12v9"/><path d="m3 8.5 9 3.5 9-3.5"/></svg>
+                    </span>
+                    <span class="srcpick-txt">
+                        <span class="srcpick-name">从飞牛中选择文件</span>
+                        <span class="srcpick-desc">NAS 上的文件</span>
+                    </span>
+                </button>
+            </div>
+            <div class="confirm-actions">
+                <button id="srcPickCancel" class="confirm-btn">取消</button>
+            </div>
+        </div>
+    </div>
+    <div id="screenshotDialog" class="confirm-overlay" style="display:none;">
+        <div class="confirm-box">
+            <div class="confirm-title">截屏预览</div>
+            <div id="screenshotPreview" class="shot-preview">
+                <img id="screenshotImg" alt="截屏图片">
+            </div>
+            <div class="confirm-actions">
+                <button id="screenshotCancel" class="confirm-btn">取消</button>
+                <button id="screenshotDownload" class="confirm-btn">保存到本地</button>
+                <button id="screenshotSaveFnos" class="confirm-btn confirm-primary" style="display:none">保存到飞牛</button>
+            </div>
+        </div>
+    </div>
+    <!-- MRP 程序退出弹窗 -->
+    <div id="mrpExitDialog" class="confirm-overlay" style="display:none;">
+        <div class="confirm-box">
+            <div id="mrpExitDialogTitle" class="confirm-title">Mrp程序已退出</div>
+            <div id="mrpExitDialogBody" class="confirm-body"></div>
+            <div class="confirm-actions">
+                <button id="mrpExitRelaunch" class="confirm-btn" style="display:none;">重新运行当前Mrp</button>
+                <button id="mrpExitAppList" class="confirm-btn confirm-primary">打开应用列表</button>
+                <button id="mrpExitCloseApp" class="confirm-btn" style="display:none;">退出应用</button>
+            </div>
+        </div>
+    </div>
+    <!-- 文件管理器 -->
+    <div id="fileManager" class="fm-overlay" style="display:none;">
+        <div class="fm-modal">
+            <div class="fm-header">
+                <button id="fmBack">返回上级</button>
+                <span id="fmPath">/mythroad</span>
+                <button id="fmClose">关闭</button>
+            </div>
+            <div class="fm-toolbar">
+                <button id="fmUpload">上传文件</button>
+                <button id="fmNewFolder">新建文件夹</button>
+                <button id="fmDownloadZip">打包下载</button>
+                <button id="fmSaveToFnos" style="display:none">保存到飞牛</button>
+            </div>
+            <div id="fmFileList" class="fm-file-list"></div>
+            <input type="file" id="fmUploadInput" multiple style="display:none">
+        </div>
+    </div>
+    <!-- 文件管理器 - 上下文菜单 -->
+    <div id="fmCtxMenu" class="fm-ctx-menu"></div>
+    <!-- 文件管理器 - 子对话框 -->
+    <div id="fmDialog" class="fm-dialog-overlay" style="display:none;">
+        <div class="fm-dialog-box">
+            <div id="fmDialogTitle" class="fm-dialog-title"></div>
+            <div id="fmDialogBody" class="fm-dialog-body"></div>
+            <div id="fmDialogActions" class="fm-dialog-actions">
+                <button id="fmDialogCancel" class="fm-btn-cancel">取消</button>
+                <button id="fmDialogOk" class="fm-btn-ok">确定</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        // 恢复功能区折叠/展开状态
+        (function () {
+            var funcSection = document.querySelector('.func-section');
+            if (!funcSection) return;
+            var saved = localStorage.getItem('vmrp_func_open');
+            // 默认展开，仅当上次记录为关闭时才收起
+            if (saved === 'false') {
+                funcSection.removeAttribute('open');
+            } else {
+                funcSection.setAttribute('open', '');
+            }
+            funcSection.addEventListener('toggle', function () {
+                localStorage.setItem('vmrp_func_open', funcSection.hasAttribute('open'));
+            });
+        })();
+    </script>
+    <script>
+        // 安全解码: decodeURIComponent 能解 %2F 等, decodeURI 不能。
+        // 飞牛传递的 path 是完整编码的, 例如 %2Fvol1%2Fmrp%2Fgame.mrp
+        function safeDecode(v) {
+            if (v == null) return v;
+            try { return decodeURIComponent(v); }
+            catch (e) {
+                try { return decodeURI(v); } catch (e2) { return v; }
+            }
+        }
+        function GetQueryString(name) {
+            var reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)");
+            // 1) 自身 URL
+            var r = window.location.search.substr(1).match(reg);
+            if (r != null) return safeDecode(r[2]);
+            // 2) 父窗口 URL (飞牛把 ?path= 加在宿主窗口地址上时, iframe 自身可能取不到)
+            try {
+                if (window.parent && window.parent !== window && window.parent.location) {
+                    var pr = String(window.parent.location.search || '').substr(1).match(reg);
+                    if (pr != null) return safeDecode(pr[2]);
+                }
+            } catch (e) { /* 跨域, 忽略 */ }
+            // 3) 飞牛 SDK 授权回调解析 (?method=...&path=[...])
+            try {
+                if (window.vmrpFnos && window.vmrpFnos.sdk) {
+                    var cb = window.vmrpFnos.sdk.parseAppAuthCallback(window.location.href);
+                    if (cb && cb.path && cb.path.length) {
+                        if (name === 'path' || name === 'f') return cb.path[0];
+                    }
+                }
+            } catch (e2) { /* 忽略 */ }
+            return null;
+        }
+
+        const dialog = document.getElementById('dialog');
+        const dialogTextarea = document.querySelector('#dialog textarea');
+        const dialogTitle = document.querySelector('#dialog h1');
+        const dialogOkBtn = document.getElementById('dialogOk');
+        const dialogCancelBtn = document.getElementById('dialogCancel');
+        const dialogInfo = document.getElementById('dialogInfo');
+        const importBtn = document.getElementById('import');
+        const inputFile = document.getElementById('files');
+        const canvas = document.getElementById('canvas');
+
+        importBtn.addEventListener("click", function (ev) {
+            showSrcPickDialog({
+                title: '导入文件',
+                fnosDesc: '从 NAS 中选择 .mrp 等文件',
+                onLocal: function () {
+                    // 本地选择: 原生 <input type=file>
+                    inputFile.click();
+                },
+                onFnos: function () {
+                    // 飞牛选择: 走飞牛 SDK 文件选择器
+                    window.vmrpFnos.importFile({
+                        title: '选择要导入的文件',
+                        accept: ['.mrp', '.nes', '.ext', '.uc2', '.zip']
+                    });
+                }
+            });
+        });
+        inputFile.addEventListener('change', function (ev) {
+            for (const file of inputFile.files) {
+                console.log(file);
+                const reader = new FileReader();
+                reader.onerror = function () {
+                    console.log("error", reader.error);
+                }
+                reader.onload = function () {
+					var dir = '';
+					if(file.name.indexOf('.') != -1){
+						var type = file.name.substring(file.name.lastIndexOf('.'));
+						if(type.toLowerCase().indexOf('nes') != -1){
+							dir = 'nes/';
+						}
+					}
+                    FS.writeFile('/mythroad/' + dir + file.name, new Uint8Array(reader.result));
+                    print("写入:'" + dir + file.name + "'完成.");
+                    showToast("导入完成: " + dir + file.name, 3500);
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        });
+
+        // ---- 存档功能按钮 ----
+        var saveProgressBtn = document.getElementById('saveProgress');
+        var clearSavesBtn = document.getElementById('clearSaves');
+
+        saveProgressBtn.addEventListener("click", function (ev) {
+            if (typeof FS === 'undefined') {
+                showToast('模拟器尚未加载完成，请稍后再试');
+                return;
+            }
+            if (window.vmrpSaveAll) {
+                window.vmrpSaveAll().then(function (count) {
+                    if (window.vmrpGetSaveInfo) {
+                        window.vmrpGetSaveInfo().then(function (info) {
+                            var sizeStr = ' (' + Math.round(info.sizeBytes / 1024) + 'KB)';
+                            var storageName = info.storageType || 'IndexedDB';
+                            showToast('游戏进度已保存到' + storageName + '，共 ' + count + ' 个文件' + sizeStr, 3500);
+                        });
+                    } else {
+                        showToast('游戏进度已保存，共 ' + count + ' 个文件');
+                    }
+                });
+            }
+        });
+
+        clearSavesBtn.addEventListener("click", function (ev) {
+            vmrpConfirm('确定要清除所有本地存档吗？\n清除后游戏进度将无法恢复，下次打开网页将恢复初始状态。', {
+                title: '清除存档',
+                okLabel: '清除',
+                okClass: 'confirm-danger'
+            }).then(function (ok) {
+                if (!ok) return;
+                if (window.vmrpClearSaves) {
+                    window.vmrpClearSaves().then(function (count) {
+                        showToast('已清除 ' + count + ' 个本地存档文件，请刷新网页以从服务器重新加载初始文件', 3500);
+                    });
+                }
+            });
+        });
+
+        // ---- 截屏按钮 ----
+        var screenshotBtn = document.getElementById('screenshot');
+        var screenshotDialog = document.getElementById('screenshotDialog');
+        var screenshotImg = document.getElementById('screenshotImg');
+        var screenshotCancel = document.getElementById('screenshotCancel');
+        var screenshotDownload = document.getElementById('screenshotDownload');
+        var lastScreenshotData = null;
+
+        function closeScreenshotDialog() {
+            screenshotDialog.style.display = 'none';
+            lastScreenshotData = null;
+            screenshotImg.src = '';
+        }
+
+        screenshotCancel.addEventListener('click', closeScreenshotDialog);
+
+        // 点击遮罩空白处关闭
+        screenshotDialog.addEventListener('click', function (ev) {
+            if (ev.target === screenshotDialog) closeScreenshotDialog();
+        });
+
+        function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+        function screenshotTimestamp() {
+            var d = new Date();
+            return d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate())
+                + '_' + pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds());
+        }
+
+        screenshotDownload.addEventListener('click', function () {
+            if (!lastScreenshotData) return;
+            var a = document.createElement('a');
+            a.href = lastScreenshotData;
+            a.download = 'vmrp_screenshot_' + screenshotTimestamp() + '.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            showToast('截屏已保存: ' + a.download);
+            closeScreenshotDialog();
+        });
+
+        // 保存截屏到飞牛 NAS
+        var screenshotSaveFnos = document.getElementById('screenshotSaveFnos');
+        if (screenshotSaveFnos) {
+            screenshotSaveFnos.addEventListener('click', function () {
+                if (!lastScreenshotData) return;
+                if (!window.vmrpFnos || !window.vmrpFnos.inFnOS) {
+                    showToast('当前不在飞牛环境，无法保存到飞牛');
+                    return;
+                }
+                screenshotSaveFnos.disabled = true;
+                var fname = 'vmrp_screenshot_' + screenshotTimestamp() + '.png';
+                // dataURL -> Uint8Array
+                var b64 = lastScreenshotData.split(',')[1] || '';
+                var bin = atob(b64);
+                var u8 = new Uint8Array(bin.length);
+                for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+
+                window.vmrpFnos.pickSaveDir().then(function (dir) {
+                    if (!dir) { showToast('已取消保存'); return null; }
+                    return fetch(window.vmrpFnos.apiUrl('/api/save-file'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            dir: dir, name: fname,
+                            data: window.vmrpFnos.u8ToBase64(u8)
+                        })
+                    }).then(function (r) { return r.json(); }).then(function (j) {
+                        if (j && j.code === 0) {
+                            showToast('已保存到飞牛: ' + j.data.path, 4000);
+                            closeScreenshotDialog();
+                        } else {
+                            showToast('保存失败: ' + ((j && j.msg) || '未知错误'), 4000);
+                        }
+                    });
+                }).catch(function (e) {
+                    showToast('保存失败: ' + (e && e.message));
+                }).then(function () {
+                    screenshotSaveFnos.disabled = false;
+                });
+            });
+        }
+
+        screenshotBtn.addEventListener('click', function () {
+            if (typeof canvas === 'undefined' || !canvas) {
+                showToast('模拟器尚未加载完成，请稍后再试');
+                return;
+            }
+            if (!canvas.width || !canvas.height) {
+                showToast('当前画面为空，无法截屏');
+                return;
+            }
+            // WebGL 默认不保留绘图缓冲区(preserveDrawingBuffer)，
+            // 需在 requestAnimationFrame 回调中(合成前)读取，才能得到完整画面
+            requestAnimationFrame(function () {
+                var dataUrl = null;
+                try {
+                    dataUrl = canvas.toDataURL('image/png');
+                } catch (e) {
+                    dataUrl = null;
+                }
+                if (!dataUrl) {
+                    try {
+                        var off = document.createElement('canvas');
+                        off.width = canvas.width;
+                        off.height = canvas.height;
+                        var ctx = off.getContext('2d');
+                        ctx.drawImage(canvas, 0, 0);
+                        dataUrl = off.toDataURL('image/png');
+                    } catch (e) {
+                        showToast('截屏失败: ' + e.message);
+                        return;
+                    }
+                }
+                if (!dataUrl || dataUrl.length < 200) {
+                    showToast('截屏失败，请稍后再试');
+                    return;
+                }
+                lastScreenshotData = dataUrl;
+                screenshotImg.src = dataUrl;
+
+                // 飞牛环境: 同时提供"保存到本地"与"保存到飞牛", 飞牛为主按钮
+                // 浏览器环境: 仅"保存到本地", 且为主动作
+                var shotInFnOS = !!(window.vmrpFnos && window.vmrpFnos.inFnOS);
+                if (screenshotSaveFnos) {
+                    screenshotSaveFnos.style.display = shotInFnOS ? '' : 'none';
+                }
+                if (screenshotDownload) {
+                    screenshotDownload.className = shotInFnOS
+                        ? 'confirm-btn'
+                        : 'confirm-btn confirm-primary';
+                }
+
+                screenshotDialog.style.display = 'flex';
+            });
+        });
+
+        // ---- 来源选择弹窗 (本地文件 / 飞牛文件) ----
+        // 飞牛环境: 弹窗让用户二选一
+        // 非飞牛环境: 直接走本地文件, 不打扰用户
+        var srcPickState = null;
+
+        function srcPickDialogEls() {
+            return {
+                overlay: document.getElementById('srcPickDialog'),
+                title: document.getElementById('srcPickTitle'),
+                local: document.getElementById('srcPickLocal'),
+                fnos: document.getElementById('srcPickFnos'),
+                cancel: document.getElementById('srcPickCancel')
+            };
+        }
+
+        function closeSrcPick() {
+            var el = srcPickDialogEls();
+            if (el.overlay) el.overlay.style.display = 'none';
+            srcPickState = null;
+        }
+
+        /**
+         * 弹出"选择文件来源"对话框。
+         * @param {Object} opts
+         *   title       {string}   标题
+         *   fnosDesc    {string}   飞牛选项的副标题
+         *   onLocal     {Function} 选择本地文件后的回调 (可选)
+         *   onFnos      {Function} 选择飞牛文件后的回调 (可选)
+         */
+        function showSrcPickDialog(opts) {
+            opts = opts || {};
+            var inFnOS = !!(window.vmrpFnos && window.vmrpFnos.inFnOS);
+
+            // 非飞牛环境: 无"飞牛"这一选项, 直接走本地, 不弹窗
+            if (!inFnOS) {
+                if (opts.onLocal) opts.onLocal();
+                return;
+            }
+
+            var el = srcPickDialogEls();
+            if (!el.overlay) {
+                if (opts.onLocal) opts.onLocal();
+                return;
+            }
+
+            if (el.title) el.title.textContent = opts.title || '选择文件来源';
+            var fnosDesc = el.fnos && el.fnos.querySelector('.srcpick-desc');
+            if (fnosDesc) fnosDesc.textContent = opts.fnosDesc || 'NAS 上的文件';
+
+            srcPickState = opts;
+
+            el.local.onclick = function () {
+                var cb = srcPickState && srcPickState.onLocal;
+                closeSrcPick();
+                if (cb) cb();
+            };
+            el.fnos.onclick = function () {
+                var cb = srcPickState && srcPickState.onFnos;
+                closeSrcPick();
+                if (cb) cb();
+            };
+            el.cancel.onclick = closeSrcPick;
+            el.overlay.onclick = function (ev) {
+                if (ev.target === el.overlay) closeSrcPick();
+            };
+
+            el.overlay.style.display = 'flex';
+            if (el.local) el.local.focus();
+        }
+
+        // ---- Toast 提示 ----
+        function showToast(msg, duration) {
+            var toast = document.getElementById('toast');
+            if (!toast) return;
+            toast.textContent = msg;
+            toast.classList.add('show');
+            clearTimeout(toast._timer);
+            toast._timer = setTimeout(function () {
+                toast.classList.remove('show');
+            }, duration || 3000);
+        }
+
+        // ---- 退出二次确认开关 (仅飞牛环境) ----
+        // 开启: MRP 程序退出后显示弹窗提示 (原有逻辑)
+        // 关闭: MRP 程序退出后不弹窗, 直接关闭飞牛应用窗口
+        // 状态持久化到 localStorage, 下次自动沿用
+        var EXIT_CONFIRM_KEY = 'vmrp_exit_confirm';
+        var exitConfirmBtn = document.getElementById('toggleExitConfirm');
+
+        function isExitConfirmOn() {
+            // 默认开启 (首次加载、无本地存储时)
+            var saved = localStorage.getItem(EXIT_CONFIRM_KEY);
+            if (saved === null) return true;
+            return saved === '1' || saved === 'true';
+        }
+
+        function setExitConfirm(on) {
+            localStorage.setItem(EXIT_CONFIRM_KEY, on ? '1' : '0');
+            syncExitConfirmBtn();
+        }
+
+        function syncExitConfirmBtn() {
+            if (!exitConfirmBtn) return;
+            var on = isExitConfirmOn();
+            // 开/关 状态配色一致, 仅改变提示文字
+            exitConfirmBtn.value = on ? '退出确认(开)' : '退出确认(关)';
+            exitConfirmBtn.title = on
+                ? 'MRP 程序退出时弹出提示（点击关闭，改为直接退出应用）'
+                : 'MRP 程序退出时直接关闭应用窗口（点击开启，改为弹出提示）';
+        }
+
+        if (exitConfirmBtn) {
+            exitConfirmBtn.addEventListener('click', function () {
+                var next = !isExitConfirmOn();
+                setExitConfirm(next);
+                showToast(next
+                    ? '已开启退出确认，MRP 退出时将弹出提示'
+                    : '已关闭退出确认，MRP 退出时将直接关闭应用窗口', 3000);
+            });
+            syncExitConfirmBtn();
+        }
+
+        // ---- 退出确认按钮可见性 (仅飞牛宿主窗口内显示) ----
+        // 注意: fnos.js 在页面底部才加载, 内联脚本执行时 window.vmrpFnos 还不存在,
+        //       且 SDK 的 iframe 判定在文档解析阶段也可能尚未成立 (window.top 访问时机)。
+        //       因此这里做"轮询 + 事件"双重确认, 任一时刻判定为真就显示。
+        function refreshExitConfirmVisible() {
+            if (!exitConfirmBtn) return false;
+            var f = window.vmrpFnos;
+            var show = false;
+            try {
+                if (f) {
+                    // 让模块重新检测一次 (SDK 握手可能刚完成), 再用其结论
+                    if (typeof f.refreshHostDetection === 'function') f.refreshHostDetection();
+                    show = typeof f.isInFnOSWindow === 'function'
+                        ? !!f.isInFnOSWindow()
+                        : !!f.inFnOS;
+                }
+            } catch (e) { show = false; }
+            exitConfirmBtn.style.display = show ? '' : 'none';
+            return show;
+        }
+
+        (function watchExitConfirmVisible() {
+            // 1) 立即试一次
+            if (refreshExitConfirmVisible()) return;
+            // 2) 定时轮询: 覆盖 fnos.js 后加载 + SDK 异步握手两种延迟
+            var tries = 0;
+            var timer = setInterval(function () {
+                tries++;
+                if (refreshExitConfirmVisible() || tries >= 40) clearInterval(timer);   // 最多约 20s
+            }, 500);
+            // 3) 页面完全加载后再补一次 (此时 fnos.js 一定已执行)
+            window.addEventListener('load', function () { refreshExitConfirmVisible(); });
+            // 4) 监听模块就绪事件 (若 fnos.js 主动派发)
+            window.addEventListener('vmrpfnosready', function () { refreshExitConfirmVisible(); });
+            // 5) SDK 握手完成后复核 (iframe 判定在 ready 之后才最可靠)
+            var waitSDK = setInterval(function () {
+                var f = window.vmrpFnos;
+                if (f && f.sdk) {
+                    clearInterval(waitSDK);
+                    try {
+                        f.sdk.ready().then(function () {
+                            refreshExitConfirmVisible();
+                        }, function () { });
+                    } catch (e) { /* 忽略 */ }
+                }
+            }, 500);
+            setTimeout(function () { clearInterval(waitSDK); }, 20000);
+        })();
+
+        // ---- 网页内确认弹窗 ----
+        // 用法: vmrpConfirm('要删除吗?', {title:'提示', okLabel:'删除', okClass:'confirm-danger', hideCancel:false}).then(function(ok){ ... })
+        function vmrpConfirm(message, options) {
+            options = options || {};
+            return new Promise(function (resolve) {
+                var overlay = document.getElementById('confirmDialog');
+                var titleEl = document.getElementById('confirmDialogTitle');
+                var bodyEl = document.getElementById('confirmDialogBody');
+                var okBtn = document.getElementById('confirmDialogOk');
+                var cancelBtn = document.getElementById('confirmDialogCancel');
+                if (!overlay || !titleEl || !bodyEl || !okBtn || !cancelBtn) {
+                    resolve(window.confirm(message));
+                    return;
+                }
+                titleEl.textContent = options.title || '提示';
+                bodyEl.textContent = message;
+                okBtn.textContent = options.okLabel || '确定';
+                cancelBtn.textContent = options.cancelLabel || '取消';
+                okBtn.className = 'confirm-btn ' + (options.okClass || 'confirm-primary');
+                cancelBtn.style.display = options.hideCancel ? 'none' : '';
+
+                overlay.style.display = 'flex';
+                okBtn.focus();
+
+                function done(val) {
+                    okBtn.onclick = null;
+                    cancelBtn.onclick = null;
+                    overlay.onclick = null;
+                    overlay.style.display = 'none';
+                    resolve(val);
+                }
+                okBtn.onclick = function () { done(true); };
+                cancelBtn.onclick = function () { done(false); };
+                // 点击遮罩关闭
+                overlay.onclick = function (e) { if (e.target === overlay) done(false); };
+            });
+        }
+
+        // ---- 目录授权相关 (重新申请授权按钮 + 授权回调监听) ----
+        (function initAuthUi() {
+            // ---- 监听授权回调页的消息 (openAppAuth 路由授权完成后通知原页面) ----
+            window.addEventListener('message', function (ev) {
+                if (ev.origin !== window.location.origin) return;
+                var d = ev.data;
+                if (!d || d.type !== 'vmrp:auth-result') return;
+                var r = d.result || {};
+                if (r.ok) {
+                    showToast('目录授权成功', 4000);
+                } else if (r.error === 'access_denied') {
+                    showToast('授权被拒绝: 该操作需要管理员权限', 5000);
+                } else {
+                    showToast('授权未完成', 4000);
+                }
+            });
+
+            // ---- 重新申请目录授权 (授权失败时的手动重试入口) ----
+            var reAuthBtn = document.getElementById('reAuthBtn');
+            if (reAuthBtn) {
+                reAuthBtn.addEventListener('click', function () {
+                    if (!window.vmrpFnos || !window.vmrpFnos.reauthorize) {
+                        showToast('模块尚未加载完成，请稍候重试');
+                        return;
+                    }
+                    if (!window.vmrpFnos.inFnOS) {
+                        showToast('仅飞牛环境可用');
+                        return;
+                    }
+                    showToast('正在尝试重新申请授权…');
+                    window.vmrpFnos.reauthorize().then(function (dir) {
+                        if (dir) {
+                            showToast('授权成功: ' + dir, 5000);
+                        } else {
+                            // adviseAuthFailure 已给出具体建议, 这里只在静默取消时兜一下
+                            var e = window.vmrpFnos.lastPickError && window.vmrpFnos.lastPickError();
+                            if (!e) showToast('未取得授权目录', 4000);
+                        }
+                    }).catch(function (e) {
+                        showToast('重新申请授权失败: ' + ((e && e.message) || ''));
+                    });
+                });
+            }
+        })();
+
+        // ---- MRP 程序退出弹窗 ----
+        // 在 window.onerror 中调用: 用户退出网页内 mrp 程序或 mrp 正常/异常退出时,
+        // 弹出提示并允许"打开应用列表"(回到默认 dsm_gm.mrp 列表程序) 或
+        // "重新运行当前Mrp"(通过 ?f= 链接打开的外部 mrp)。
+        var mrpExitDialogShown = false;
+        // message: 自定义正文 (如 ?f= 加载失败提示), 缺省为"程序已退出"
+        // title  : 自定义标题, 缺省为 "Mrp程序已退出"
+        function showMrpExitDialog(message, title) {
+            var overlay = document.getElementById('mrpExitDialog');
+
+            // 飞牛环境下若关闭了"退出二次确认": 不弹窗, 直接关闭应用窗口
+            if (window.vmrpFnos && window.vmrpFnos.inFnOS && !isExitConfirmOn()) {
+                console.log('[vmrp-fnos] 退出确认已关闭, 直接关闭应用窗口');
+                mrpExitDialogShown = true;
+                window.vmrpFnos.closeApp().then(function (ok) {
+                    if (!ok) {
+                        // 关闭失败: 回退到弹窗, 避免用户被困住
+                        mrpExitDialogShown = false;
+                        showMrpExitDialog(message, title);
+                    }
+                });
+                return;
+            }
+
+            if (!overlay || mrpExitDialogShown) return;
+            mrpExitDialogShown = true;
+
+            var titleEl = document.getElementById('mrpExitDialogTitle');
+            var bodyEl = document.getElementById('mrpExitDialogBody');
+            var relaunchBtn = document.getElementById('mrpExitRelaunch');
+            var appListBtn = document.getElementById('mrpExitAppList');
+            var closeAppBtn = document.getElementById('mrpExitCloseApp');
+
+            // 检测是否正在运行外部 mrp: URL ?f= 参数
+            var urlFile = GetQueryString('f');
+            var relaunchable = !!urlFile;
+
+            // 显示当前程序名: 优先使用 ?title= 参数传入的名称, 不存在时再取 f= 携带的文件名
+            var fileName = null;
+            var titleParam = GetQueryString('title');
+            if (titleParam) {
+                fileName = titleParam;
+            } else if (urlFile) {
+                var m = String(urlFile).replace(/\\/g, '/').match(/[^/?#]+$/);
+                fileName = m ? m[0] : urlFile;
+            } else if (window.vmrpLaunchFileName) {
+                fileName = window.vmrpLaunchFileName;
+            }
+
+            if (titleEl) {
+                titleEl.textContent = title || 'Mrp程序已退出';
+            }
+            if (bodyEl) {
+                bodyEl.textContent = message || ('当前运行的 MRP 程序已退出。' +
+                    (fileName ? '\n程序: ' + fileName : '') +
+                    '\n\n请选择下一步操作:');
+            }
+            if (relaunchBtn) {
+                relaunchBtn.style.display = relaunchable ? '' : 'none';
+                relaunchBtn.onclick = function () {
+                    overlay.style.display = 'none';
+                    vmrpRerunCurrentMrp();
+                };
+            }
+            if (appListBtn) {
+                appListBtn.onclick = function () {
+                    overlay.style.display = 'none';
+                    vmrpOpenAppList();
+                };
+            }
+            // "退出应用"按钮: 仅当页面运行在飞牛宿主窗口内时显示
+            // (独立浏览器标签页无宿主窗口可关闭, 不显示该按钮)
+            if (closeAppBtn) {
+                var insideFnOS = !!(window.vmrpFnos &&
+                    typeof window.vmrpFnos.isInFnOSWindow === 'function' &&
+                    window.vmrpFnos.isInFnOSWindow());
+                closeAppBtn.style.display = insideFnOS ? '' : 'none';
+                if (insideFnOS) {
+                    closeAppBtn.onclick = function () {
+                        closeAppBtn.disabled = true;
+                        window.vmrpFnos.closeApp().then(function (ok) {
+                            if (!ok) {
+                                // close 未能生效: 恢复按钮并提示
+                                closeAppBtn.disabled = false;
+                                showToast('关闭应用窗口失败，请手动关闭', 3500);
+                            }
+                        });
+                    };
+                }
+            }
+            overlay.style.display = 'flex';
+            if (relaunchable && relaunchBtn) relaunchBtn.focus();
+            else if (appListBtn) appListBtn.focus();
+        }
+
+        // 打开应用列表: 清除外部 mrp 痕迹, 重新打开模拟器网页运行默认 dsm_gm.mrp 列表程序
+        function vmrpOpenAppList() {
+            var hash = window.location.hash || '';
+            window.location.href = window.location.pathname + hash;
+        }
+
+        // 重新运行当前 mrp: ?f= 场景刷新 URL 即恢复
+        function vmrpRerunCurrentMrp() {
+            window.location.reload();
+        }
+
+        // ---- 抗锯齿开关 ----
+        var toggleAABtn = document.getElementById('toggleAA');
+        function updateAAState(aaOff) {
+            var canvasEl = document.getElementById('canvas');
+            if (aaOff) {
+                canvasEl.style.imageRendering = 'pixelated';
+                toggleAABtn.value = '抗锯齿(关)';
+            } else {
+                canvasEl.style.imageRendering = '';
+                toggleAABtn.value = '抗锯齿(开)';
+            }
+        }
+        // 页面加载时恢复上次设置
+        (function () {
+            var saved = localStorage.getItem('vmrp_aa');
+            updateAAState(saved === 'false');
+        })();
+        toggleAABtn.addEventListener('click', function () {
+            var current = localStorage.getItem('vmrp_aa');
+            var newState = (current === 'false') ? 'true' : 'false';
+            localStorage.setItem('vmrp_aa', newState);
+            updateAAState(newState === 'false');
+            if (newState === 'false') {
+                showToast('已关闭抗锯齿，画面将显示像素风格');
+            } else {
+                showToast('已开启抗锯齿，画面将平滑显示');
+            }
+        });
+
+        // ---- 虚拟键盘显示/隐藏开关 ----
+        var toggleKeymapBtn = document.getElementById('toggleKeymap');
+        var keymapEl = document.getElementById('keymap');
+        function updateKeymapState(hidden) {
+            if (hidden) {
+                keymapEl.style.display = 'none';
+                toggleKeymapBtn.value = '虚拟键盘(关)';
+            } else {
+                keymapEl.style.display = '';
+                toggleKeymapBtn.value = '虚拟键盘(开)';
+            }
+        }
+        // 页面加载时恢复上次设置，默认显示
+        (function () {
+            var saved = localStorage.getItem('vmrp_keymap');
+            updateKeymapState(saved === 'false');
+        })();
+        toggleKeymapBtn.addEventListener('click', function () {
+            var current = localStorage.getItem('vmrp_keymap');
+            var newState = (current === 'false') ? 'true' : 'false';
+            localStorage.setItem('vmrp_keymap', newState);
+            updateKeymapState(newState === 'false');
+            if (newState === 'false') {
+                showToast('已隐藏虚拟键盘');
+            } else {
+                showToast('已显示虚拟键盘');
+            }
+        });
+
+        // ---- 文件管理器 ----
+        var fm = {
+            currentPath: '/mythroad',
+            overlay: document.getElementById('fileManager'),
+            fileList: document.getElementById('fmFileList'),
+            pathLabel: document.getElementById('fmPath'),
+            ctxMenu: document.getElementById('fmCtxMenu'),
+            uploadInput: document.getElementById('fmUploadInput'),
+        };
+
+        function fmOpen() {
+            if (typeof FS === 'undefined') {
+                showToast('模拟器尚未加载完成，请稍后再试');
+                return;
+            }
+            fm.overlay.style.display = 'flex';
+            fmNavigate('/mythroad');
+        }
+        function fmClose() {
+            fm.overlay.style.display = 'none';
+            fmHideCtx();
+            fmHideDialog();
+        }
+        function fmNavigate(path) {
+            fm.currentPath = path;
+            fm.pathLabel.textContent = path;
+            fmRenderList(path);
+        }
+        function fmGoUp() {
+            if (fm.currentPath === '/') return;
+            var parent = fm.currentPath.substring(0, fm.currentPath.lastIndexOf('/'));
+            if (!parent) parent = '/';
+            fmNavigate(parent);
+        }
+        function fmFmtSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+        function fmFmtDate(stat) {
+            var t = stat.mtime || stat.ctime;
+            if (!t) return '未知';
+            if (t instanceof Date) return t.toLocaleString('zh-CN');
+            if (typeof t === 'number') {
+                if (t < 1e12) t *= 1000;
+                return new Date(t).toLocaleString('zh-CN');
+            }
+            return String(t);
+        }
+        function fmFmtMode(mode) {
+            return '0' + (mode & 0o777).toString(8);
+        }
+        function fmRenderList(path) {
+            fm.fileList.innerHTML = '';
+            var entries;
+            try { entries = FS.readdir(path); } catch (e) {
+                fm.fileList.innerHTML = '<div class="fm-empty">无法读取目录</div>';
+                return;
+            }
+            var dirs = [], files = [];
+            for (var i = 0; i < entries.length; i++) {
+                var name = entries[i];
+                if (name === '.' || name === '..') continue;
+                var sep = path.charAt(path.length - 1) === '/' ? '' : '/';
+                var fullPath = path + sep + name;
+                try {
+                    var stat = FS.stat(fullPath);
+                    if (FS.isDir(stat.mode)) dirs.push({ name: name, path: fullPath, stat: stat });
+                    else files.push({ name: name, path: fullPath, stat: stat });
+                } catch (e) { }
+            }
+            dirs.sort(function (a, b) { return a.name.localeCompare(b.name); });
+            files.sort(function (a, b) { return a.name.localeCompare(b.name); });
+            if (dirs.length === 0 && files.length === 0) {
+                fm.fileList.innerHTML = '<div class="fm-empty">空目录</div>';
+                return;
+            }
+            for (var d = 0; d < dirs.length; d++) fmAddItem(dirs[d], true);
+            for (var f = 0; f < files.length; f++) fmAddItem(files[f], false);
+        }
+        function fmAddItem(item, isDir) {
+            var div = document.createElement('div');
+            div.className = 'fm-item';
+            var icon = document.createElement('span');
+            icon.className = 'fm-item-icon';
+            icon.textContent = isDir ? '\u{1F4C1}' : '\u{1F4C4}';
+            var name = document.createElement('span');
+            name.className = 'fm-item-name';
+            name.textContent = item.name;
+            var size = document.createElement('span');
+            size.className = 'fm-item-size';
+            size.textContent = isDir ? '-' : fmFmtSize(item.stat.size);
+            var menuBtn = document.createElement('span');
+            menuBtn.className = 'fm-item-menu';
+            menuBtn.innerHTML = '&#8942;';
+            menuBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                fmShowCtx(e, item, isDir);
+            });
+            div.appendChild(icon);
+            div.appendChild(name);
+            div.appendChild(size);
+            div.appendChild(menuBtn);
+            div.addEventListener('click', function () {
+                if (isDir) fmNavigate(item.path);
+                else fmShowProps(item, false);
+            });
+            fm.fileList.appendChild(div);
+        }
+
+        // ---- Context Menu ----
+        function fmShowCtx(e, item, isDir) {
+            fmHideCtx();
+            var menu = fm.ctxMenu;
+            menu.innerHTML = '';
+            if (isDir) {
+                fmCtxItem(menu, '打开', function () { fmNavigate(item.path); });
+                fmCtxItem(menu, '下载为ZIP', function () { fmDownloadZip(item.path); });
+                if (window.vmrpFnos && window.vmrpFnos.inFnOS) {
+                    fmCtxItem(menu, '保存到飞牛', function () { fmSaveToFnos(item.path); });
+                }
+                fmCtxItem(menu, '重命名', function () { fmRename(item); });
+                fmCtxItem(menu, '移动到...', function () { fmMove(item); });
+                fmCtxItem(menu, '属性', function () { fmShowProps(item, true); });
+                fmCtxSep(menu);
+                fmCtxItem(menu, '删除', function () { fmDelete(item, true); }, true);
+            } else {
+                fmCtxItem(menu, '下载', function () { fmDownloadFile(item); });
+                if (window.vmrpFnos && window.vmrpFnos.inFnOS) {
+                    fmCtxItem(menu, '保存到飞牛', function () { fmSaveFileToFnos(item); });
+                }
+                fmCtxItem(menu, '重命名', function () { fmRename(item); });
+                fmCtxItem(menu, '移动到...', function () { fmMove(item); });
+                fmCtxItem(menu, '复制到...', function () { fmCopy(item); });
+                fmCtxItem(menu, '属性', function () { fmShowProps(item, false); });
+                fmCtxSep(menu);
+                fmCtxItem(menu, '删除', function () { fmDelete(item, false); }, true);
+            }
+            menu.style.display = 'block';
+            var x = e.clientX, y = e.clientY;
+            var r = menu.getBoundingClientRect();
+            if (x + r.width > window.innerWidth) x = window.innerWidth - r.width - 8;
+            if (y + r.height > window.innerHeight) y = window.innerHeight - r.height - 8;
+            menu.style.left = Math.max(0, x) + 'px';
+            menu.style.top = Math.max(0, y) + 'px';
+        }
+        function fmCtxItem(menu, label, cb, danger) {
+            var d = document.createElement('div');
+            d.className = 'fm-ctx-item' + (danger ? ' danger' : '');
+            d.textContent = label;
+            d.addEventListener('click', function () { fmHideCtx(); cb(); });
+            menu.appendChild(d);
+        }
+        function fmCtxSep(menu) {
+            var s = document.createElement('div');
+            s.className = 'fm-ctx-sep';
+            menu.appendChild(s);
+        }
+        function fmHideCtx() { fm.ctxMenu.style.display = 'none'; }
+
+        // ---- Sub Dialog (input / properties) ----
+        function fmShowDialog(opts) {
+            var dlg = document.getElementById('fmDialog');
+            document.getElementById('fmDialogTitle').textContent = opts.title || '';
+            var body = document.getElementById('fmDialogBody');
+            var actions = document.getElementById('fmDialogActions');
+            var okBtn = document.getElementById('fmDialogOk');
+            var cancelBtn = document.getElementById('fmDialogCancel');
+
+            if (opts.html != null) {
+                body.innerHTML = opts.html;
+            } else if (opts.input != null) {
+                body.innerHTML = '<input type="text" id="fmDialogInput" class="fm-dialog-input" value="' + fmEscapeHtml(opts.input) + '">';
+            } else {
+                body.innerHTML = '';
+            }
+
+            okBtn.textContent = opts.okLabel || '确定';
+            cancelBtn.textContent = opts.cancelLabel || '取消';
+            actions.style.display = opts.hideActions ? 'none' : 'flex';
+            okBtn.style.display = opts.hideOk ? 'none' : '';
+
+            okBtn.onclick = function () {
+                if (opts.onOk) {
+                    if (opts.input != null) {
+                        var val = document.getElementById('fmDialogInput').value;
+                        opts.onOk(val);
+                    } else {
+                        opts.onOk();
+                    }
+                } else {
+                    fmHideDialog();
+                }
+            };
+            cancelBtn.onclick = function () {
+                if (opts.onCancel) opts.onCancel();
+                else fmHideDialog();
+            };
+            dlg.style.display = 'flex';
+            if (opts.input != null) {
+                setTimeout(function () {
+                    var inp = document.getElementById('fmDialogInput');
+                    if (inp) {
+                        inp.focus();
+                        inp.select();
+                        // 阻止键盘事件冒泡到 canvas/Emscripten，防止被拦截
+                        inp.addEventListener('keydown', function (e) { e.stopPropagation(); });
+                        inp.addEventListener('keypress', function (e) { e.stopPropagation(); });
+                        inp.addEventListener('keyup', function (e) { e.stopPropagation(); });
+                    }
+                }, 50);
+            }
+        }
+        function fmHideDialog() {
+            document.getElementById('fmDialog').style.display = 'none';
+        }
+        function fmEscapeHtml(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        // ---- File Actions ----
+        function fmDownloadFile(item) {
+            try {
+                var data = FS.readFile(item.path);
+                var blob = new Blob([data], { type: 'application/octet-stream' });
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = item.name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+                showToast('下载: ' + item.name);
+            } catch (e) {
+                showToast('下载失败: ' + e.message);
+            }
+        }
+        // 收集目录下所有文件为 {name, data} 条目 (打包下载 / 保存到飞牛 共用)
+        function fmCollectEntries(dirPath) {
+            if (typeof window.vmrpScanDir !== 'function') return null;
+            var paths = window.vmrpScanDir(dirPath);
+            if (paths.length === 0) return [];
+            var entries = [];
+            for (var i = 0; i < paths.length; i++) {
+                try {
+                    var data = FS.readFile(paths[i]);
+                    var zipName = paths[i].charAt(0) === '/' ? paths[i].substring(1) : paths[i];
+                    entries.push({ name: zipName, data: data });
+                } catch (e) { }
+            }
+            return entries;
+        }
+
+        function fmDownloadZip(dirPath) {
+            // 飞牛环境: 让用户选择 保存到 NAS 还是 下载到本地
+            if (window.vmrpFnos && window.vmrpFnos.inFnOS) {
+                var zipFolder = dirPath.substring(dirPath.lastIndexOf('/') + 1) || '目录';
+                fmShowDialog({
+                    title: '打包 ' + zipFolder,
+                    html: '<div class="fm-dialog-text">请选择保存方式：</div>' +
+                          '<div class="fm-dialog-sub">保存到飞牛：写入 NAS 文件系统<br>下载到本地：保存到当前设备</div>',
+                    okLabel: '保存到飞牛',
+                    cancelLabel: '下载到本地',
+                    onOk: function () { fmHideDialog(); fmDownloadZipToFnos(dirPath); },
+                    onCancel: function () { fmHideDialog(); fmDownloadZipLocal(dirPath); }
+                });
+                return;
+            }
+            fmDownloadZipLocal(dirPath);
+        }
+
+        // 打包 ZIP 并保存到飞牛 NAS
+        function fmDownloadZipToFnos(dirPath) {
+            if (typeof window.vmrpBuildZip !== 'function') {
+                showToast('ZIP打包功能不可用');
+                return;
+            }
+            var entries = fmCollectEntries(dirPath);
+            if (entries === null) { showToast('ZIP打包功能不可用'); return; }
+            if (entries.length === 0) { showToast('目录为空'); return; }
+
+            var blob = window.vmrpBuildZip(entries);
+            var folderName = dirPath.substring(dirPath.lastIndexOf('/') + 1) || 'download';
+            var zipName = folderName + '_' + new Date().toISOString().slice(0, 10) + '.zip';
+
+            showToast('请选择保存位置...', 2000);
+            blob.arrayBuffer().then(function (ab) {
+                return window.vmrpFnos.pickSaveDir().then(function (dir) {
+                    if (!dir) { showToast('已取消保存'); return; }
+                    return fetch(window.vmrpFnos.apiUrl('/api/save-file'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            dir: dir,
+                            name: zipName,
+                            data: window.vmrpFnos.u8ToBase64(new Uint8Array(ab))
+                        })
+                    }).then(function (r) { return r.json(); }).then(function (j) {
+                        if (j && j.code === 0) {
+                            showToast('已保存到飞牛: ' + j.data.path + ' (' + entries.length + ' 个文件)', 4000);
+                        } else {
+                            showToast('保存失败: ' + ((j && j.msg) || '未知错误'), 4000);
+                        }
+                    });
+                });
+            }).catch(function (e) {
+                showToast('保存失败: ' + (e && e.message));
+            });
+        }
+
+        // 打包 ZIP 并触发浏览器下载
+        function fmDownloadZipLocal(dirPath) {
+            if (typeof window.vmrpBuildZip !== 'function') {
+                showToast('ZIP打包功能不可用');
+                return;
+            }
+            var entries = fmCollectEntries(dirPath);
+            if (entries === null) {
+                showToast('ZIP打包功能不可用');
+                return;
+            }
+            if (entries.length === 0) {
+                showToast('目录为空');
+                return;
+            }
+            var blob = window.vmrpBuildZip(entries);
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            var folderName = dirPath.substring(dirPath.lastIndexOf('/') + 1) || 'download';
+            a.download = folderName + '_' + new Date().toISOString().slice(0, 10) + '.zip';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+            showToast('已打包下载 ' + entries.length + ' 个文件');
+        }
+
+        // ---- 保存到飞牛文件系统 (保留目录结构, 不打包) ----
+        function fmSaveToFnos(dirPath) {
+            if (!window.vmrpFnos || !window.vmrpFnos.inFnOS) {
+                showToast('当前不在飞牛环境，无法保存到飞牛文件系统');
+                return;
+            }
+            var entries = fmCollectEntries(dirPath);
+            if (entries === null) {
+                showToast('无法读取目录内容');
+                return;
+            }
+            if (entries.length === 0) {
+                showToast('目录为空');
+                return;
+            }
+            showToast('请选择保存位置...', 2000);
+            // 去掉 ZVM 前缀 "/mythroad/" 使目录结构更清晰
+            var stripped = entries.map(function (e) {
+                var n = e.name;
+                if (n.indexOf('mythroad/') === 0) n = n.substring('mythroad/'.length);
+                return { name: n, data: e.data };
+            });
+            window.vmrpFnos.saveEntries(stripped).then(function (count) {
+                if (count > 0) {
+                    showToast('已保存 ' + count + ' 个文件到飞牛', 3500);
+                }
+            });
+        }
+
+        // ---- 保存当前模拟器文件到飞牛 (右键菜单用) ----
+        function fmSaveFileToFnos(item) {
+            if (!window.vmrpFnos || !window.vmrpFnos.inFnOS) {
+                showToast('当前不在飞牛环境，无法保存到飞牛文件系统');
+                return;
+            }
+            try {
+                var data = FS.readFile(item.path);
+                window.vmrpFnos.saveSingle(item.name, data);
+            } catch (e) {
+                showToast('读取失败: ' + e.message);
+            }
+        }
+
+        function fmRename(item) {
+            fmShowDialog({
+                title: '重命名',
+                input: item.name,
+                onOk: function (newName) {
+                    if (!newName || newName === item.name) { fmHideDialog(); return; }
+                    var sep = fm.currentPath.charAt(fm.currentPath.length - 1) === '/' ? '' : '/';
+                    var newPath = fm.currentPath + sep + newName;
+                    try {
+                        FS.rename(item.path, newPath);
+                        fmHideDialog();
+                        showToast('已重命名为 ' + newName);
+                        fmRenderList(fm.currentPath);
+                    } catch (e) {
+                        showToast('重命名失败: ' + e.message);
+                        fmHideDialog();
+                    }
+                }
+            });
+        }
+        function fmMove(item) {
+            fmShowDialog({
+                title: '移动到 (完整路径)',
+                input: item.path,
+                onOk: function (newPath) {
+                    if (!newPath || newPath === item.path) { fmHideDialog(); return; }
+                    try {
+                        fmEnsureDir(newPath.substring(0, newPath.lastIndexOf('/')));
+                        FS.rename(item.path, newPath);
+                        fmHideDialog();
+                        showToast('已移动到 ' + newPath);
+                        fmRenderList(fm.currentPath);
+                    } catch (e) {
+                        showToast('移动失败: ' + e.message);
+                        fmHideDialog();
+                    }
+                }
+            });
+        }
+        function fmCopy(item) {
+            fmShowDialog({
+                title: '复制到 (完整路径)',
+                input: item.path + '.copy',
+                onOk: function (newPath) {
+                    if (!newPath || newPath === item.path) { fmHideDialog(); return; }
+                    try {
+                        fmEnsureDir(newPath.substring(0, newPath.lastIndexOf('/')));
+                        var data = FS.readFile(item.path);
+                        FS.writeFile(newPath, data);
+                        fmHideDialog();
+                        showToast('已复制到 ' + newPath);
+                        fmRenderList(fm.currentPath);
+                    } catch (e) {
+                        showToast('复制失败: ' + e.message);
+                        fmHideDialog();
+                    }
+                }
+            });
+        }
+        function fmDelete(item, isDir) {
+            fmShowDialog({
+                title: '确认删除',
+                html: '<div style="font-size:13px;color:var(--text);">确定删除 "' + fmEscapeHtml(item.name) + '" 吗？<br>' + (isDir ? '文件夹内所有内容将被删除。' : '') + '</div>',
+                okLabel: '删除',
+                onOk: function () {
+                    try {
+                        if (isDir) fmDeleteDirRecursive(item.path);
+                        else FS.unlink(item.path);
+                        fmHideDialog();
+                        showToast('已删除 ' + item.name);
+                        fmRenderList(fm.currentPath);
+                    } catch (e) {
+                        showToast('删除失败: ' + e.message);
+                        fmHideDialog();
+                    }
+                }
+            });
+        }
+        function fmDeleteDirRecursive(path) {
+            var entries = FS.readdir(path);
+            for (var i = 0; i < entries.length; i++) {
+                var name = entries[i];
+                if (name === '.' || name === '..') continue;
+                var sep = path.charAt(path.length - 1) === '/' ? '' : '/';
+                var fullPath = path + sep + name;
+                var stat = FS.stat(fullPath);
+                if (FS.isDir(stat.mode)) fmDeleteDirRecursive(fullPath);
+                else FS.unlink(fullPath);
+            }
+            FS.rmdir(path);
+        }
+        function fmShowProps(item, isDir) {
+            var html = '<div style="padding:4px 0;">';
+            html += '<div class="fm-props-row"><span class="fm-props-label">名称</span><span class="fm-props-value">' + fmEscapeHtml(item.name) + '</span></div>';
+            html += '<div class="fm-props-row"><span class="fm-props-label">路径</span><span class="fm-props-value">' + fmEscapeHtml(item.path) + '</span></div>';
+            html += '<div class="fm-props-row"><span class="fm-props-label">类型</span><span class="fm-props-value">' + (isDir ? '文件夹' : '文件') + '</span></div>';
+            if (!isDir) {
+                html += '<div class="fm-props-row"><span class="fm-props-label">大小</span><span class="fm-props-value">' + fmFmtSize(item.stat.size) + ' (' + item.stat.size + ' B)</span></div>';
+            }
+            html += '<div class="fm-props-row"><span class="fm-props-label">权限</span><span class="fm-props-value">' + fmFmtMode(item.stat.mode) + '</span></div>';
+            html += '<div class="fm-props-row"><span class="fm-props-label">修改时间</span><span class="fm-props-value">' + fmFmtDate(item.stat) + '</span></div>';
+            html += '</div>';
+            fmShowDialog({
+                title: '文件属性',
+                html: html,
+                hideOk: true,
+                cancelLabel: '关闭',
+                onCancel: function () { fmHideDialog(); }
+            });
+        }
+        function fmUploadFiles() {
+            var files = fm.uploadInput.files;
+            if (!files || files.length === 0) return;
+            var total = files.length, done = 0;
+            for (var i = 0; i < files.length; i++) {
+                (function (file) {
+                    var reader = new FileReader();
+                    reader.onload = function () {
+                        var sep = fm.currentPath.charAt(fm.currentPath.length - 1) === '/' ? '' : '/';
+                        var filePath = fm.currentPath + sep + file.name;
+                        try {
+                            FS.writeFile(filePath, new Uint8Array(reader.result));
+                            done++;
+                            if (done === total) {
+                                showToast('已上传 ' + done + ' 个文件');
+                                fmRenderList(fm.currentPath);
+                            }
+                        } catch (e) {
+                            showToast('上传失败: ' + file.name + ' - ' + e.message);
+                        }
+                    };
+                    reader.onerror = function () {
+                        showToast('读取失败: ' + file.name);
+                    };
+                    reader.readAsArrayBuffer(file);
+                })(files[i]);
+            }
+            fm.uploadInput.value = '';
+        }
+        function fmNewFolder() {
+            fmShowDialog({
+                title: '新建文件夹',
+                input: '',
+                onOk: function (name) {
+                    if (!name) { fmHideDialog(); return; }
+                    var sep = fm.currentPath.charAt(fm.currentPath.length - 1) === '/' ? '' : '/';
+                    var path = fm.currentPath + sep + name;
+                    try {
+                        FS.mkdir(path);
+                        fmHideDialog();
+                        showToast('已创建文件夹 ' + name);
+                        fmRenderList(fm.currentPath);
+                    } catch (e) {
+                        showToast('创建失败: ' + e.message);
+                        fmHideDialog();
+                    }
+                }
+            });
+        }
+        function fmEnsureDir(path) {
+            if (!path || path === '/') return;
+            try {
+                var stat = FS.stat(path);
+                if (FS.isDir(stat.mode)) return;
+            } catch (e) { }
+            var parent = path.substring(0, path.lastIndexOf('/'));
+            fmEnsureDir(parent);
+            try { FS.mkdir(path); } catch (e) { }
+        }
+
+        // ---- 文件管理器事件绑定 ----
+        document.getElementById('fileMgr').addEventListener('click', fmOpen);
+        document.getElementById('fmClose').addEventListener('click', fmClose);
+        document.getElementById('fmBack').addEventListener('click', fmGoUp);
+        document.getElementById('fmUpload').addEventListener('click', function () {
+            var targetDir = fm.currentPath;
+            showSrcPickDialog({
+                title: '上传文件',
+                fnosDesc: '从 NAS 中选择文件上传到当前目录',
+                onLocal: function () {
+                    fm.uploadInput.click();
+                },
+                onFnos: function () {
+                    var ok = window.vmrpFnos.importFile({
+                        title: '选择要上传的文件',
+                        destDir: targetDir,
+                        onDone: function (okCount, total) {
+                            showToast('已上传 ' + okCount + '/' + total + ' 个文件');
+                            fmRenderList(targetDir);
+                        }
+                    });
+                    if (!ok) showToast('当前不在飞牛环境，无法选择 NAS 文件');
+                }
+            });
+        });
+        fm.uploadInput.addEventListener('change', fmUploadFiles);
+        document.getElementById('fmNewFolder').addEventListener('click', fmNewFolder);
+        document.getElementById('fmDownloadZip').addEventListener('click', function () { fmDownloadZip(fm.currentPath); });
+        // 保存到飞牛 (仅飞牛环境显示并启用)
+        var fmSaveToFnosBtn = document.getElementById('fmSaveToFnos');
+        function syncFnosButtons() {
+            if (window.vmrpFnos && window.vmrpFnos.inFnOS) {
+                fmSaveToFnosBtn.style.display = '';
+                if (!fmSaveToFnosBtn.dataset.bound) {
+                    fmSaveToFnosBtn.dataset.bound = '1';
+                    fmSaveToFnosBtn.addEventListener('click', function () { fmSaveToFnos(fm.currentPath); });
+                }
+            } else {
+                fmSaveToFnosBtn.style.display = 'none';
+            }
+        }
+        syncFnosButtons();
+        // SDK 宿主握手是异步的, 就绪后再复核一次
+        if (window.vmrpFnos && window.vmrpFnos.sdk) {
+            try {
+                window.vmrpFnos.sdk.ready().then(syncFnosButtons, function () {});
+            } catch (e) { /* 忽略 */ }
+        }
+        // 点击遮罩关闭
+        fm.overlay.addEventListener('click', function (e) { if (e.target === fm.overlay) fmClose(); });
+        // 阻止子对话框事件冒泡，防止点击输入框时关闭整个文件管理器
+        document.getElementById('fmDialog').addEventListener('click', function (e) { e.stopPropagation(); });
+        // 点击其他地方关闭上下文菜单
+        document.addEventListener('click', function () { fmHideCtx(); });
+        // ESC 关闭
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                var cdlg = document.getElementById('confirmDialog');
+                if (cdlg && cdlg.style.display !== 'none') {
+                    var cCancel = document.getElementById('confirmDialogCancel');
+                    if (cCancel && cCancel.onclick) cCancel.onclick();
+                    return;
+                }
+                if (document.getElementById('fmDialog').style.display !== 'none') {
+                    fmHideDialog();
+                } else if (fm.ctxMenu.style.display === 'block') {
+                    fmHideCtx();
+                } else if (fm.overlay.style.display !== 'none') {
+                    fmClose();
+                }
+            }
+        });
+
+        // ---- 竖屏画面自适应 ----
+        // 竖屏时根据视口高度判断键盘是否被遮挡，若被遮挡则按比例缩小 canvas
+        function adjustPortraitCanvas() {
+            var mainEl = document.getElementById('main');
+            var keymapEl = document.getElementById('keymap');
+            if (!mainEl || !keymapEl || !canvas) return;
+
+            // 横屏不处理，清除限制
+            if (window.matchMedia('(orientation: landscape)').matches) {
+                mainEl.style.removeProperty('--portrait-canvas-w');
+                return;
+            }
+
+            // 先清除限制，测量自然状态
+            mainEl.style.removeProperty('--portrait-canvas-w');
+            void canvas.offsetHeight; // 强制回流
+
+            var viewportH = window.innerHeight;
+            var keymapRect = keymapEl.getBoundingClientRect();
+
+            // 键盘底部在视口内，不需要调整
+            if (keymapRect.bottom <= viewportH) {
+                return;
+            }
+
+            // 键盘被遮挡，计算可用高度
+            var canvasRect = canvas.getBoundingClientRect();
+            var gap = keymapRect.top - canvasRect.bottom; // canvas 与键盘之间的间距
+
+            // 可用高度 = 视口高度 - canvas 顶部位置 - 间距 - 键盘高度
+            var availableH = viewportH - canvasRect.top - gap - keymapRect.height;
+
+            if (availableH <= 0) return; // 空间不足，无法调整
+
+            // canvas 宽度 = 高度 * (240/320)
+            var canvasW = availableH * (240 / 320);
+
+            // 不超过容器全宽
+            var screenFrame = document.querySelector('.screen-frame');
+            var containerW = screenFrame.clientWidth;
+            if (canvasW >= containerW) return; // 全宽已足够，无需限制
+
+            mainEl.style.setProperty('--portrait-canvas-w', Math.floor(canvasW) + 'px');
+        }
+
+        window.addEventListener('resize', adjustPortraitCanvas);
+        window.addEventListener('orientationchange', function () {
+            setTimeout(adjustPortraitCanvas, 200);
+        });
+        // 页面 load 后延迟调用一次（处理某些浏览器布局延迟）
+        window.addEventListener('load', function () {
+            setTimeout(adjustPortraitCanvas, 300);
+        });
+
+        const midi = MidiPlayer();
+        const MR_SOUND_MIDI = 0;
+        const MR_SOUND_WAV = 1;
+        const MR_SOUND_MP3 = 2;
+        function js_playSound(type, data, dataLen, loop) {
+            if (type == MR_SOUND_MIDI) {
+                const buf = Module.HEAPU8.slice(data, data + dataLen);
+                midi.play(buf.buffer, loop);
+            } else {
+                console.log(arguments);
+            }
+            return 0;
+        }
+
+        function js_stopSound(type) {
+            if (type == MR_SOUND_MIDI) {
+                midi.stop();
+            } else {
+                console.log(arguments);
+            }
+            return 0;
+        }
+
+        let shakef = 0;
+        let shakeStartTime = 0;
+        let shakeRAF = 0;
+        let shakeLastFlip = 0;
+
+        function js_startShake(ms) {
+            // 抖动动画不要用 setInterval(...,1):
+            // 那是每毫秒一次 (1000Hz) 的样式写入, 会绕过浏览器帧同步,
+            // 导致合成/布局线程持续满负荷 (实测是移动端 CPU 告警的主要来源)。
+            // 改用 requestAnimationFrame + 帧节流 (~16ms 翻转一次, 约 30Hz 视觉足够)。
+            js_stopShake();
+            shakeStartTime = Date.now();
+            var toggle = false;
+            var FLIP_MS = 32;   // 每 32ms 翻转一次 = 约 15Hz 视觉抖动, 够用且省电
+            shakeLastFlip = shakeStartTime;
+
+            function step() {
+                var now = Date.now();
+                if (shakef !== 1) return;                  // 已被 stop
+                if (now - shakeStartTime >= ms) { js_stopShake(); return; }
+                if (now - shakeLastFlip >= FLIP_MS) {
+                    shakeLastFlip = now;
+                    toggle = !toggle;
+                    canvas.style.transform = toggle ? 'translateX(-1px)' : 'translateX(1px)';
+                }
+                shakeRAF = requestAnimationFrame(step);
+            }
+            shakef = 1;   // 标记运行中 (保持原有真值语义: 非 0 即运行)
+            shakeRAF = requestAnimationFrame(step);
+            return 0;
+        }
+
+        function js_stopShake() {
+            if (shakeRAF) {
+                cancelAnimationFrame(shakeRAF);
+                shakeRAF = 0;
+            }
+            if (shakef) {
+                shakef = 0;
+                canvas.style.transform = '';
+            }
+            return 0;
+        }
+
+        const MR_DIALOG_EVENT = 6;
+        const MR_DIALOG_KEY_OK = 0; // 对话框/文本框等的"确定"键被点击(选择);
+        const MR_DIALOG_KEY_CANCEL = 1; // 对话框/文本框等的"取消"("返回")键被点击(选择);
+        const MR_DIALOG_OK = 0; // 对话框有"确定"键;
+        const MR_DIALOG_OK_CANCEL = 1; // 对话框有"确定" "取消"键;
+        const MR_DIALOG_CANCEL = 2; // 对话框有"返回"键
+        const MR_EDIT_ANY = 0;
+        const MR_EDIT_NUMERIC = 1;
+        const MR_EDIT_PASSWORD = 2;
+
+        function dialogRelease() {
+            dialog.style.visibility = 'hidden';
+            dialogOkBtn.style.visibility = 'hidden';
+            dialogCancelBtn.style.visibility = 'hidden';
+            dialogOkBtn.onclick = null;
+            dialogCancelBtn.onclick = null;
+            Module._setEventEnable(true);
+        }
+
+        function dialogCreate(title, text, keyType, editAble, editType, max_size) {
+            Module._setEventEnable(false);
+            dialog.style.visibility = 'visible';
+            dialogTitle.innerText = getUnicodeStr(title);
+            dialogTextarea.value = getUnicodeStr(text);
+            dialogTextarea.scrollTop = 0;
+            dialogTextarea.readOnly = !editAble;
+            if (dialogTextarea.readOnly) {
+                dialogInfo.innerText = '';
+            }
+            if (keyType == MR_DIALOG_OK_CANCEL || keyType == MR_DIALOG_OK) {
+                dialogOkBtn.style.visibility = 'visible';
+                dialogOkBtn.onclick = function (e) {
+                    if (editAble && getDialogText().length > max_size) {
+                        return;
+                    }
+                    dialogTextarea.readOnly = true;
+                    Module._c_event(MR_DIALOG_EVENT, MR_DIALOG_KEY_OK, 0);
+                }
+            }
+            if (keyType == MR_DIALOG_OK_CANCEL || keyType == MR_DIALOG_CANCEL) {
+                dialogCancelBtn.style.visibility = 'visible';
+                dialogCancelBtn.onclick = function (e) {
+                    Module._c_event(MR_DIALOG_EVENT, MR_DIALOG_KEY_CANCEL, 0);
+                }
+            }
+            dialogTextarea.oninput = function (e) {
+                if (editType == MR_EDIT_NUMERIC) {
+                    // todo
+                }
+                if (editAble) {
+                    updateDialogInfo(max_size);
+                }
+            };
+            if (editAble) {
+                updateDialogInfo(max_size);
+            }
+        }
+
+        function js_dialogCreate(title, text, type) {
+            dialogCreate(title, text, type, false, 0, 0);
+            return 1234;
+        }
+
+        function js_dialogRelease(dialog) {
+            dialogRelease();
+            return 0;
+        }
+
+        function js_dialogRefresh(dialog, title, text, keyType) {
+            dialogTitle.innerText = getUnicodeStr(title);
+            dialogTextarea.value = getUnicodeStr(text);
+            if (keyType == -1) return 0;
+            dialogOkBtn.style.visibility = 'hidden';
+            dialogCancelBtn.style.visibility = 'hidden';
+            dialogOkBtn.onclick = null;
+            dialogCancelBtn.onclick = null;
+            if (keyType == MR_DIALOG_OK_CANCEL || keyType == MR_DIALOG_OK) {
+                dialogOkBtn.style.visibility = 'visible';
+                dialogOkBtn.onclick = function (e) {
+                    Module._c_event(MR_DIALOG_EVENT, MR_DIALOG_KEY_OK, 0);
+                }
+            }
+            if (keyType == MR_DIALOG_OK_CANCEL || keyType == MR_DIALOG_CANCEL) {
+                dialogCancelBtn.style.visibility = 'visible';
+                dialogCancelBtn.onclick = function (e) {
+                    Module._c_event(MR_DIALOG_EVENT, MR_DIALOG_KEY_CANCEL, 0);
+                }
+            }
+            return 0;
+        }
+
+        function js_textCreate(title, text, type) {
+            dialogCreate(title, text, type, false, 0, 0);
+            return 1234;
+        }
+
+        function js_textRelease(handle) {
+            dialogRelease();
+            return 0;
+        }
+
+        function js_textRefresh(handle, title, text) {
+            dialogTitle.innerText = getUnicodeStr(title);
+            dialogTextarea.value = getUnicodeStr(text);
+            return 0;
+        }
+
+        function getUnicodeStr(p) {
+            let i = p / 2;
+            const arr = [];
+            while (Module.HEAPU16[i]) {
+                const v = Module.HEAPU16[i];
+                arr.push(String.fromCharCode((v >> 8 | v << 8) & 0xffff));
+                i++;
+            }
+            return arr.join('');
+        }
+
+        function getDialogText() {
+            let str = dialogTextarea.value;
+            str = str.replace(/\r\n/g, '\n');
+            str = str.replace(/\n/g, '\r\n');
+            return str;
+        }
+
+        function updateDialogInfo(max_size) {
+            const str = getDialogText();
+            dialogInfo.innerText = str.length + '/' + max_size;
+            if (str.length > max_size) {
+                dialogInfo.style.color = 'red';
+            } else {
+                dialogInfo.style.color = '';
+            }
+        }
+
+        function js_editCreate(title, text, type, max_size) {
+            dialogCreate(title, text, MR_DIALOG_OK_CANCEL, true, type, max_size);
+            return 1234;
+        }
+
+        function js_editRelease(edit) {
+            dialogRelease();
+            return 0;
+        }
+
+        let holdTextMem = 0;
+
+        function js_editGetText(edit) {
+            const str = getDialogText();
+            const len = str.length + 1;
+            if (holdTextMem != 0) {
+                Module._my_freeExt(holdTextMem);
+            }
+            holdTextMem = Module._my_mallocExt(len * 2);
+            if (holdTextMem != 0) {
+                let ptr = holdTextMem;
+                for (let a = 0; a < str.length; a++) {
+                    const v = str.charCodeAt(a);
+                    Module.HEAPU8[ptr++] = (v >> 8) & 0xff;
+                    Module.HEAPU8[ptr++] = v & 0xff;
+                }
+                Module.HEAPU8[ptr++] = 0;
+                Module.HEAPU8[ptr] = 0;
+            }
+            return holdTextMem;
+        }
+
+        function touch_add(id, code) {
+            const key = document.getElementById(id);
+            key.onmousedown = function (e) {
+                Module._c_event(0, code, 0);
+                e.preventDefault();
+            }
+            key.onmouseup = function (e) {
+                Module._c_event(1, code, 0);
+                e.preventDefault();
+            }
+            key.ontouchstart = key.onmousedown;
+            key.ontouchend = key.onmouseup;
+        }
+        touch_add("key_0", 0);
+        touch_add("key_1", 1);
+        touch_add("key_2", 2);
+        touch_add("key_3", 3);
+        touch_add("key_4", 4);
+        touch_add("key_5", 5);
+        touch_add("key_6", 6);
+        touch_add("key_7", 7);
+        touch_add("key_8", 8);
+        touch_add("key_9", 9);
+        touch_add("key_star", 10);
+        touch_add("key_pound", 11);
+        touch_add("key_up", 12);
+        touch_add("key_down", 13);
+        touch_add("key_left", 14);
+        touch_add("key_right", 15);
+        touch_add("key_sleft", 17);
+        touch_add("key_sright", 18);
+        touch_add("key_ok", 20);
+
+    </script>
+
+    <script type='text/javascript'>
+        var statusElement = document.getElementById('status');
+        var progressElement = document.getElementById('progress');
+        function print(text) {
+            if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+            console.log(text);
+        }
+        function setTitle() {
+            const title = GetQueryString('title')
+            if (title) {
+                document.title = title;
+            }
+        }
+
+        /* ------------------------------------------------------------------
+         * 页面不可见时暂停模拟器主循环
+         *
+         * Emscripten 主循环由 setTimeout(...,0) 驱动 (未设 fps 时限速),
+         * 页面被切到后台 (手机 App 内切走 / 锁屏 / 换标签) 时仍会满速空转,
+         * 是"短暂高 CPU 占用告警"的主要来源。
+         *
+         * Module.pauseMainLoop() / resumeMainLoop() 是 Emscripten 官方导出的,
+         * 暂停后再恢复不会丢帧, 也不影响 MRP 程序状态与存档。
+         * ------------------------------------------------------------------ */
+        var _loopPaused = false;
+        function setupVisibilityPause() {
+            if (typeof Module === 'undefined' ||
+                typeof Module.pauseMainLoop !== 'function') return;
+
+            function doPause() {
+                if (_loopPaused) return;
+                _loopPaused = true;
+                try { Module.pauseMainLoop(); } catch (e) { /* 忽略 */ }
+            }
+            function doResume() {
+                if (!_loopPaused) return;
+                _loopPaused = false;
+                try { Module.resumeMainLoop(); } catch (e) { /* 忽略 */ }
+            }
+
+            document.addEventListener('visibilitychange', function () {
+                if (document.hidden) doPause(); else doResume();
+            });
+            window.addEventListener('blur', function () {
+                // 桌面端窗口失焦也暂停 (手机端 WebView 一般只触发 visibilitychange)
+                if (document.hidden) doPause();
+            });
+            window.addEventListener('focus', doResume);
+            // 暴露给外部调试
+            window.__vmrpLoopPaused = function () { return _loopPaused; };
+        }
+
+        var Module = {
+            preRun: [],
+            postRun: [setTitle, function() {
+                document.getElementById('main').classList.add('loaded');
+                if (typeof adjustPortraitCanvas === 'function') adjustPortraitCanvas();
+                setupVisibilityPause();
+            }],
+            print: print,
+            printErr: function (text) {
+                if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+                console.error(text);
+            },
+            // MRP 程序在主循环内调用 exit() 退出时, Emscripten runIter 会捕获 ExitStatus
+            // (该异常到不了 window.onerror), 通过此钩子弹出"Mrp程序已退出"提示
+            onMrpExit: function (status) {
+                if (typeof showMrpExitDialog === 'function') showMrpExitDialog();
+            },
+            canvas: (function () {
+                var canvas = document.getElementById('canvas');
+
+                // As a default initial behavior, pop up an alert when webgl context is lost. To make your
+                // application robust, you may want to override this behavior before shipping!
+                // See http://www.khronos.org/registry/webgl/specs/latest/1.0/#5.15.2
+                canvas.addEventListener("webglcontextlost", function (e) {
+                    showToast('WebGL上下文丢失，请刷新网页', 5000);
+                    e.preventDefault();
+                }, false);
+
+                return canvas;
+            })(),
+            setStatus: function (text) {
+                if (!Module.setStatus.last) Module.setStatus.last = {
+                    time: Date.now(),
+                    text: ''
+                };
+                if (text === Module.setStatus.last.text) return;
+                var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+                var now = Date.now();
+                if (m && now - Module.setStatus.last.time < 30) return; // if this is a progress update, skip it if too soon
+                Module.setStatus.last.time = now;
+                Module.setStatus.last.text = text;
+                if (m) {
+                    text = m[1];
+                    progressElement.value = parseInt(m[2]) * 100;
+                    progressElement.max = parseInt(m[4]) * 100;
+                    progressElement.style.visibility = 'visible';
+                } else {
+                    progressElement.style.visibility = 'hidden';
+                }
+                statusElement.innerHTML = text;
+            },
+            totalDependencies: 0,
+            monitorRunDependencies: function (left) {
+                this.totalDependencies = Math.max(this.totalDependencies, left);
+                Module.setStatus(left ? '准备中... (' + (this.totalDependencies - left) + '/' + this.totalDependencies + ')' : '下载完成');
+                if (!left) {
+                    document.getElementById('main').classList.add('loaded');
+                    if (typeof adjustPortraitCanvas === 'function') adjustPortraitCanvas();
+                }
+            }
+        };
+        Module.setStatus('下载中...');
+        window.onerror = function (event, source, lineno, colno, error) {
+            // 用户退出网页内 mrp 程序、mrp 正常/异常退出时才会执行到这里
+            // (mrp 调用 exit/abort 时, Emscripten 抛出的异常会直达 window.onerror)。
+            // 模拟器尚未加载完成前的脚本错误: 弹窗提示"模拟器加载失败"。
+            var mainEl = document.getElementById('main');
+            var mrpStarted = !!(mainEl && mainEl.classList.contains('loaded'));
+            if (mrpStarted && typeof showMrpExitDialog === 'function') {
+                showMrpExitDialog();
+            } else if (typeof showMrpExitDialog === 'function') {
+                // 加载阶段错误: 复用退出弹窗, 提示加载失败
+                showMrpExitDialog('模拟器加载失败，请刷新网页。\n\n请选择下一步操作:', '模拟器加载失败');
+            } else {
+                // 极端情况 (弹窗函数不可用): 状态条 + toast 同时提示
+                Module.setStatus('模拟器异常，请刷新网页或查看日志 ');
+                if (typeof showToast === 'function') {
+                    showToast('模拟器异常，请刷新网页', 4000);
+                }
+            }
+            Module.setStatus = function (text) {
+                if (text) Module.printErr('[post-exception status] ' + text);
+            };
+        };
+    </script>
+    <script src="./fs.js"></script>
+    <script src="./fnos.js"></script>
+    <script async src="./vmrp.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,197 @@
+#!/bin/bash
+
+# VMRP 飞牛应用 - 生命周期脚本
+# 统一网关模式: 服务监听 ${TRIM_APPDEST}/app.sock, 由飞牛网关校验登录态后转发。
+#
+# 设计原则 (踩坑后总结):
+#   1. 全部关键路径都写日志, 便于从 ${TRIM_PKGVAR}/info.log 定位问题
+#   2. 不依赖 /usr/bin/env, 用 bash 前缀赋值传环境变量
+#   3. 启动后必须确认 socket 真的创建成功, 否则明确报错并返回非零
+#   4. 运行时优先用 install_dep_apps 声明的 nodejs_v22, PATH 先 export 再调用 node
+
+LOG_FILE="${TRIM_PKGVAR}/info.log"
+PID_FILE="${TRIM_PKGVAR}/app.pid"
+
+GATEWAY_PREFIX="/app/vmrp"
+SOCKET_PATH="${TRIM_APPDEST}/app.sock"
+SERVER_JS="${TRIM_APPDEST}/server/server.js"
+
+# 依赖运行时 (manifest: install_dep_apps = nodejs_v22)
+NODE_RUNTIME_BIN="/var/apps/nodejs_v22/target/bin"
+
+# 防止类 MSYS 环境改写以 '/' 开头的变量值
+export MSYS_NO_PATHCONV=1
+export MSYS2_ARG_CONV_EXCL="*"
+
+# 运行时 bin 目录必须在最前面, 且要在任何 node 调用之前完成
+if [ -d "${NODE_RUNTIME_BIN}" ]; then
+    export PATH="${NODE_RUNTIME_BIN}:${PATH}"
+fi
+
+log_msg() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "${LOG_FILE}" 2>/dev/null
+}
+
+# 输出用户可见的错误 (飞牛会把该文件内容展示在应用中心)
+fail() {
+    log_msg "ERROR: $1"
+    echo "$1" > "${TRIM_TEMP_LOGFILE}" 2>/dev/null
+    return 1
+}
+
+resolve_node() {
+    # 优先运行时目录下的 node
+    if [ -x "${NODE_RUNTIME_BIN}/node" ]; then
+        echo "${NODE_RUNTIME_BIN}/node"
+        return 0
+    fi
+    # 兜底: PATH 查找
+    if command -v node >/dev/null 2>&1; then
+        command -v node
+        return 0
+    fi
+    return 1
+}
+
+check_process() {
+    local pid="$1"
+    [ -n "${pid}" ] || return 1
+    kill -0 "${pid}" 2>/dev/null
+}
+
+status_process() {
+    if [ -f "${PID_FILE}" ]; then
+        local pid
+        pid="$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')"
+        if check_process "${pid}"; then
+            # 注意: 这里只判进程存活, 不把"socket 缺失"当作未运行。
+            # 原因: 飞牛会先调 status 探测状态, 若此时 socket 尚在创建中而返回
+            # 未就绪(3), 系统可能直接判定应用启动失败 -> 日志出现"应用异常退出"。
+            # socket 缺失只在日志里提示, 真正的启动成败由 start_process 的
+            # 等待逻辑负责。
+            if [ -n "${SOCKET_PATH}" ] && [ ! -S "${SOCKET_PATH}" ]; then
+                log_msg "status: 进程存活但 socket 尚未就绪 (可能仍在启动)"
+            fi
+            return 0
+        fi
+        rm -f "${PID_FILE}"
+    fi
+    return 1
+}
+
+start_process() {
+    if status_process; then
+        log_msg "已在运行, 跳过启动"
+        return 0
+    fi
+
+    log_msg "=== start: appname=${TRIM_APPNAME} ver=${TRIM_APPVER} ==="
+    log_msg "TRIM_APPDEST=${TRIM_APPDEST}"
+    log_msg "TRIM_PKGVAR=${TRIM_PKGVAR}"
+
+    if [ ! -f "${SERVER_JS}" ]; then
+        fail "服务文件缺失: ${SERVER_JS}"
+        return 1
+    fi
+
+    local NODE
+    NODE="$(resolve_node)"
+    if [ -z "${NODE}" ]; then
+        fail "未找到 node 运行时 (期望 ${NODE_RUNTIME_BIN}/node), 请确认依赖 nodejs_v22 已安装"
+        return 1
+    fi
+    log_msg "node = ${NODE} ($("${NODE}" -v 2>&1))"
+
+    # 清理上次残留, 防 EADDRINUSE / 状态误判
+    rm -f "${SOCKET_PATH}" "${PID_FILE}" 2>/dev/null
+
+    # socket 必须建在 ${TRIM_APPDEST} (网关固定转发到 target/app.sock)。
+    # 若该目录对运行用户不可写, 这里提前诊断出来, 避免只看到网关 502。
+    if ! touch "${TRIM_APPDEST}/.wtest" 2>/dev/null; then
+        log_msg "警告: ${TRIM_APPDEST} 不可写, socket 可能创建失败; 尝试放宽权限"
+        chmod 0775 "${TRIM_APPDEST}" 2>/dev/null || true
+    else
+        rm -f "${TRIM_APPDEST}/.wtest" 2>/dev/null
+    fi
+    log_msg "socket 目标目录: $(dirname "${SOCKET_PATH}") 可写=$([ -w "$(dirname "${SOCKET_PATH}")" ] && echo yes || echo no)"
+
+    cd "${TRIM_APPDEST}" || { fail "无法进入目录 ${TRIM_APPDEST}"; return 1; }
+
+    # 用 bash 前缀赋值传环境变量 (不要用 env 命令, 飞牛环境不保证存在)
+    # VMRP_DISABLE_TCP=1: 网关模式下只监听 Unix Socket。
+    #   - 避免与别的应用抢端口
+    #   - 避免服务绕过网关被直接访问 (网关会校验 NAS 登录态)
+    SOCKET_PATH="${SOCKET_PATH}" \
+    GATEWAY_PREFIX="${GATEWAY_PREFIX}" \
+    VMRP_DISABLE_TCP="1" \
+        "${NODE}" "${SERVER_JS}" >> "${LOG_FILE}" 2>&1 &
+    local APP_PID=$!
+    printf "%s" "${APP_PID}" > "${PID_FILE}"
+    log_msg "pid = ${APP_PID}, 等待 socket: ${SOCKET_PATH}"
+
+    # 等待 socket 出现 (最多 10 秒)
+    local wait_count=0
+    while [ ! -S "${SOCKET_PATH}" ] && [ "${wait_count}" -lt 20 ]; do
+        if ! check_process "${APP_PID}"; then
+            fail "服务进程已退出 (pid=${APP_PID}), 未能创建 socket, 详见 ${LOG_FILE}"
+            rm -f "${PID_FILE}"
+            return 1
+        fi
+        sleep 0.5
+        wait_count=$((wait_count + 1))
+    done
+
+    if [ ! -S "${SOCKET_PATH}" ]; then
+        fail "等待 socket 超时: ${SOCKET_PATH} (进程仍在, 详见 ${LOG_FILE})"
+        return 1
+    fi
+
+    log_msg "启动成功: socket 就绪 ${SOCKET_PATH}"
+    return 0
+}
+
+stop_process() {
+    log_msg "=== stop ==="
+
+    if [ -r "${PID_FILE}" ]; then
+        local pid
+        pid="$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')"
+        if check_process "${pid}"; then
+            log_msg "TERM -> ${pid}"
+            kill -TERM "${pid}" >> "${LOG_FILE}" 2>&1
+            local count=0
+            while check_process "${pid}" && [ "${count}" -lt 10 ]; do
+                sleep 1
+                count=$((count + 1))
+            done
+            if check_process "${pid}"; then
+                log_msg "KILL -> ${pid}"
+                kill -KILL "${pid}" >> "${LOG_FILE}" 2>&1
+                sleep 1
+            fi
+        fi
+        rm -f "${PID_FILE}"
+    fi
+
+    # 兜底清理
+    pkill -f "server/server.js" >/dev/null 2>&1
+    rm -f "${SOCKET_PATH}" 2>/dev/null
+    return 0
+}
+
+case "$1" in
+start)
+    if start_process; then exit 0; else exit 1; fi
+    ;;
+stop)
+    stop_process
+    exit 0
+    ;;
+status)
+    if status_process; then exit 0; else exit 3; fi
+    ;;
+*)
+    echo "Unknown command: $1" > "${TRIM_TEMP_LOGFILE}" 2>/dev/null
+    exit 1
+    ;;
+esac
