@@ -455,16 +455,45 @@
      * ================================================================== */
 
     /**
+     * 解析查询串中的单个参数值。
+     *
+     * 关键: 飞牛文件管理器(以及统一网关)在拼接 ?path= 时按
+     * application/x-www-form-urlencoded 语义编码 —— **空格会变成 `+`**,
+     * 而不是 `%20`。如果只用 decodeURIComponent, `+` 会原样保留,
+     * 导致文件名里的空格变成加号, 最终提示"文件不存在"。
+     *
+     * 因此必须先把 `+` 还原成空格, 再做百分号解码 (即 form-urlencoded 解码)。
+     * 注意顺序不能颠倒: 若先 decodeURIComponent, 文件名里真正的 `%2B`(加号)
+     * 会先被解成 `+`, 随后又被误当空格, 造成数据损坏。
+     *
+     * @param {string} raw 查询串里截取到的原始值
+     * @returns {string} 解码后的值
+     */
+    function decodeQueryValue(raw) {
+        if (raw == null) return '';
+        var s = String(raw);
+        // 1) 先还原 form-urlencoded 的空格
+        s = s.replace(/\+/g, ' ');
+        // 2) 再做百分号解码 (非法序列按原样保留, 避免整条路径丢失)
+        try { s = decodeURIComponent(s); } catch (e) { /* 保持原样 */ }
+        return s;
+    }
+
+    /**
      * 解析文件关联传入的 path 参数。
      * 飞牛打开文件时会追加 path=/vol1/xxx/yyy.mrp
      * 支持 SDK 的 parseAppAuthCallback (路由授权回调) 与普通 query。
+     *
+     * 兼容两种取值位置:
+     *   - 标准 query  : ?path=/vol1/a%20b.mrp
+     *   - hash 路由   : #/xxx?path=... (某些宿主把参数挂在 hash 后面)
      */
     function resolveLaunchPath() {
-        // 1) 普通 query: ?path=... (端口服务入口会走这里)
-        var qs = window.location.search || '';
+        // 1) 普通 query / hash query: ?path=... (端口服务入口会走这里)
+        var qs = (window.location.search || '') + '&' + (window.location.hash || '');
         var m = qs.match(/[?&]path=([^&]*)/);
         if (m && m[1]) {
-            try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
+            return decodeQueryValue(m[1]);
         }
         // 2) SDK 回调解析 (统一网关 / openAppAuth 场景)
         if (sdk && typeof sdk.parseAppAuthCallback === 'function') {
@@ -1103,7 +1132,7 @@
     })();
 
     window.vmrpFnos = {
-        version: '1.6.0',
+        version: '1.6.1',
         get inFnOS() { return inFnOS; },
         get sdkLoaded() { return sdkLoaded; },
         get sdk() { return sdk; },
@@ -1137,7 +1166,7 @@
                     ? 'mobile-app'
                     : (inIframeNow() ? 'web-host' : 'standalone-web'),
                 // 版本自检: 页面脚本自带的指纹 vs 其承载模块
-                moduleVersion: '1.6.0',
+                moduleVersion: '1.6.1',
                 wwwStamp: window.__VMRP_WWW_STAMP || null,
                 location: window.location.href,
                 appApi: getAppApi(),

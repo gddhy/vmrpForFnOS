@@ -203,6 +203,36 @@ vmrp-fn-app/
 飞牛在用户选择"用 MRP模拟器打开"某文件时，会在入口 URL 后追加 `?path=/vol1/xxx/yyy.mrp`。
 `fs.js` 的 preRun 检测到 `path` 参数后转为请求 `/api/open-mrp`，复用原有 `?f=` 自动运行机制，写入 `/mythroad/dsm_gm.mrp` 位置后直接启动。
 
+#### 文件名含空格的处理（重要）
+
+飞牛拼接 `?path=` 时按 **`application/x-www-form-urlencoded`** 语义编码，
+即**空格会变成 `+`** 而不是 `%20`。若只用 `decodeURIComponent` 解码，`+` 会原样保留，
+导致文件名里的空格变成加号，最终提示"文件不存在"或打开失败。
+
+因此所有查询串解码都遵循**两步**（顺序不可颠倒）：
+
+```js
+var s = String(raw).replace(/\+/g, ' ');   // 1) 先把 form-urlencoded 的空格还原
+try { s = decodeURIComponent(s); } catch (e) {}  // 2) 再做百分号解码
+```
+
+先替换再解码，才能保住文件名里**真正的加号**（编码为 `%2B`）：若顺序颠倒，
+`%2B` 会先被解成 `+`，随后又被误当空格，造成数据损坏。
+
+涉及位置（三处前端 + 一处后端防护）：
+
+| 文件 | 函数 | 作用 |
+|---|---|---|
+| `app/www/fnos.js` | `decodeQueryValue()` | 文件关联主链路（`?path=`） |
+| `app/www/index.html` | `safeDecode()` | 页面内 `GetQueryString`（`?f=` / `?title=`） |
+| `app/www/callback.html` | `safeDec()` | 授权回调查询串 |
+| `app/server/server.js` | `sanitizeAbsPath()` | **不做**无条件解码，避免二次解码 |
+
+后端 `sanitizeAbsPath` 特别说明：前端一律用 `encodeURIComponent` 传出，
+`url.parse(req.url, true)` 已解过一层，所以后端拿到的是**真实路径**。
+此时若再无条件 `decodeURIComponent`，文件名本身含 `%20` 字样的文件（真的叫 `a%20b.mrp`）
+会被二次解码成 `a b.mrp`，反而指向错误文件。故改为**先按原样判断，失败再解码一次**兜底。
+
 ### 缓存与版本
 
 移动端 WebView 会无视校验直接使用缓存，因此：

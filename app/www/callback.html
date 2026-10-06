@@ -109,11 +109,18 @@
                     var i = kv.indexOf('=');
                     var k = i < 0 ? kv : kv.slice(0, i);
                     var v = i < 0 ? '' : kv.slice(i + 1);
-                    try { out[decodeURIComponent(k)] = decodeURIComponent(v); } catch (e) {
-                        out[k] = v;
-                    }
+                    // 查询串按 form-urlencoded 语义编码: 空格是 `+` 而非 `%20`,
+                    // 必须先还原 `+` 再百分号解码, 否则路径里的空格会变成加号。
+                    out[safeDec(k)] = safeDec(v);
                 });
                 return out;
+            }
+
+            // form-urlencoded 解码: 先 `+` -> 空格, 再百分号解码
+            function safeDec(v) {
+                if (v == null) return '';
+                var s = String(v).replace(/\+/g, ' ');
+                try { return decodeURIComponent(s); } catch (e) { return s; }
             }
 
             var q = parseQuery();

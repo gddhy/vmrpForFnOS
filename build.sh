@@ -45,6 +45,8 @@ if command -v node >/dev/null 2>&1; then
     echo
     node tools/test-pickresult.js || { echo "选择器返回值归一化测试失败, 已中止打包"; exit 1; }
     echo
+    node tools/test-filename.js || { echo "文件名解码 (空格转义) 测试失败, 已中止打包"; exit 1; }
+    echo
     node tools/test-cache-cpu.js || { echo "缓存/版本自检/CPU 防护测试失败, 已中止打包"; exit 1; }
     echo
     node tools/verify-stale-flow.js || { echo "版本指纹端到端验证失败, 已中止打包"; exit 1; }

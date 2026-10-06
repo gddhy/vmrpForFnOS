@@ -912,13 +912,16 @@
         })();
     </script>
     <script>
-        // 安全解码: decodeURIComponent 能解 %2F 等, decodeURI 不能。
-        // 飞牛传递的 path 是完整编码的, 例如 %2Fvol1%2Fmrp%2Fgame.mrp
+        // 安全解码: 查询串按 form-urlencoded 语义编码, 空格是 `+` 而不是 `%20`。
+        // 因此必须先把 `+` 还原成空格, 再做百分号解码 —— 否则文件名里的空格
+        // 会变成加号, 后端按该路径找不到文件。
+        // 顺序不可颠倒: 先替换再解码, 才能保住文件名里真正的 `%2B`(加号)。
         function safeDecode(v) {
             if (v == null) return v;
-            try { return decodeURIComponent(v); }
+            var s = String(v).replace(/\+/g, ' ');
+            try { return decodeURIComponent(s); }
             catch (e) {
-                try { return decodeURI(v); } catch (e2) { return v; }
+                try { return decodeURI(s); } catch (e2) { return s; }
             }
         }
         function GetQueryString(name) {

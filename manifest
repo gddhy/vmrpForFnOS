@@ -1,6 +1,6 @@
 appname               = vmrp
-version               = 1.0.5
-display_name          = MRP模拟器
+version               = 1.0.6
+display_name          = MRP 模拟器
 desc                  = 基于 Emscripten 的冒泡(Mythroad)功能机模拟器，可在飞牛上运行 MRP 应用与游戏，支持双击 .mrp 文件直接打开运行。
 platform              = all
 source                = thirdparty

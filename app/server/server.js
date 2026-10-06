@@ -307,18 +307,36 @@ function readBody(req, limit) {
 /**
  * 安全校验用户传入的绝对路径。
  * 只允许 /vol* 开头的路径 (飞牛的存储空间路径), 拒绝路径穿越。
+ *
+ * ⚠️ 这里**不做** percent 解码。原因:
+ *   前端一律用 encodeURIComponent 传出, `url.parse(req.url, true)` 已经把
+ *   query 解码过一层, 所以到这里拿到的已经是"真实路径"。
+ *   若再解码一次, 文件名里本身就含 `%2F` 形态字符的文件 (如真的叫 `a%20b.mrp`)
+ *   会被二次解码成 `a b.mrp`, 反而指向错误的文件。
+ *
+ * 兼容: 若某条链路漏了编码(直接传了 %20 形态), 首次解码探测一次即可命中,
+ *   做法是先按原样判断, 失败再尝试解码一次 —— 而不是无条件解码。
  */
 function sanitizeAbsPath(p) {
     if (!p || typeof p !== 'string') return null;
-    // 统一分隔符, 解码
-    let s = p.trim();
-    try { s = decodeURIComponent(s); } catch (e) { /* 保持原样 */ }
-    if (!s.startsWith('/')) return null;
-    // 规范化, 消除 .. 和 // 
-    const norm = path.posix.normalize(s);
-    if (norm.indexOf('..') !== -1) return null;
-    if (!/^\/vol\d+\//.test(norm)) return null;   // 仅允许 /vol1/... /vol2/...
-    return norm;
+
+    function tryNorm(s) {
+        s = String(s).trim();
+        if (!s.startsWith('/')) return null;
+        const norm = path.posix.normalize(s);
+        if (norm.indexOf('..') !== -1) return null;
+        if (!/^\/vol\d+\//.test(norm)) return null;
+        return norm;
+    }
+
+    // 1) 优先按"已是真实路径"处理 (正常链路)
+    const direct = tryNorm(p);
+    if (direct) return direct;
+
+    // 2) 兜底: 该值可能是未解码的百分号形态, 解一次再试
+    let decoded = p;
+    try { decoded = decodeURIComponent(p); } catch (e) { return null; }
+    return tryNorm(decoded);
 }
 
 // 把绝对路径安全地映射到静态根目录下 (防目录穿越)

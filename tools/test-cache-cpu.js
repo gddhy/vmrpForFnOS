@@ -98,8 +98,8 @@ t('导出 resumeMainLoop', /Module\["resumeMainLoop"\]/.test(vmrpJs));
 
 /* ---------------- 7. 版本与诊断能力 (内部保留, UI 不暴露) ---------------- */
 console.log('\n【7】版本与诊断 (API 保留, 页面不暴露调试 UI)');
-t('fnos.js 暴露 version 字段', /version: '1\.6\.0'/.test(fnosSrc));
-t('diagnose 返回 moduleVersion', /moduleVersion: '1\.6\.0'/.test(fnosSrc));
+t('fnos.js 暴露 version 字段', /version: '1\.6\.1'/.test(fnosSrc));
+t('diagnose 返回 moduleVersion', /moduleVersion: '1\.6\.1'/.test(fnosSrc));
 t('diagnose 返回 wwwStamp', /wwwStamp: window\.__VMRP_WWW_STAMP/.test(fnosSrc));
 t('暴露 report() 一次性诊断', /report: function \(\)/.test(fnosSrc));
 t('暴露 forceReload() 强制刷新', /forceReload: function \(\)/.test(fnosSrc));
@@ -164,7 +164,7 @@ t('清档仅由 clearAllSaves 主动触发', /async function clearAllSaves\(\)/.
 t('fnos.js 用 localStorage 记住保存目录', /localStorage\.setItem\('vmrp\.lastSaveDir'/.test(fnosSrc));
 t('缓存头仅作用于 HTTP 层 (no-store 在静态资源处理里)', /'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'/.test(serverSrc));
 
-console.log('\n【10】选择器错误码识别 (v1.6.0)');
+console.log('\n【10】选择器错误码识别 (v1.6.1)');
 t('定义 PICK_ERROR_TEXT 表', /var PICK_ERROR_TEXT = \{/.test(fnosSrc));
 t('含 1003103 应用权限校验失败', /'1003103': '应用权限校验失败/.test(fnosSrc));
 t('含 1003201 管理员已关闭', /'1003201': '管理员已关闭/.test(fnosSrc));
@@ -174,6 +174,17 @@ t('定义 isUserCancel', /function isUserCancel\(\)/.test(fnosSrc));
 t('暴露 lastPickError()', /lastPickError: function \(\)/.test(fnosSrc));
 t('暴露 probeOpenApi()', /probeOpenApi: function \(\)/.test(fnosSrc));
 t('暴露 queryUserFolders()', /queryUserFolders: function \(\)/.test(fnosSrc));
+
+console.log('\n【11】文件名解码 (空格 -> + 转义 bug 回归)');
+const indexSrc11 = fs.readFileSync(path.join(ROOT, 'app', 'www', 'index.html'), 'utf8');
+const cbSrc11 = fs.readFileSync(path.join(ROOT, 'app', 'www', 'callback.html'), 'utf8');
+t('fnos.js 定义 decodeQueryValue (先还原 + 再解码)', /function decodeQueryValue\(raw\)/.test(fnosSrc));
+t('fnos.js 含 + -> 空格 替换', fnosSrc.indexOf("replace(/\\+/g, ' ')") !== -1);
+t('fnos.js resolveLaunchPath 兼容 hash 参数', /window\.location\.hash/.test(fnosSrc));
+t('index.html safeDecode 含 + -> 空格 替换', indexSrc11.indexOf("replace(/\\+/g, ' ')") !== -1);
+t('callback.html safeDec 含 + -> 空格 替换', cbSrc11.indexOf("replace(/\\+/g, ' ')") !== -1);
+t('server.js sanitizeAbsPath 不再无条件解码', /const direct = tryNorm\(p\)/.test(serverSrc));
+t('server.js 仍拒绝路径穿越', /norm\.indexOf\('\.\.'\) !== -1/.test(serverSrc));
 
 console.log('\n结果: ' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
